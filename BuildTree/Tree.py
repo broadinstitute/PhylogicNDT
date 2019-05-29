@@ -173,28 +173,27 @@ class Tree:
     def compute_tree_likelihood(self, time_points):
         tree_llhood = sum(np.sum(self._calc_tree_lik_detailed(time_points), axis=1))
         logging.debug('Tree likelihood {}'.format(tree_llhood))
-        return tree_llhood # sum(np.sum(self._calc_tree_lik_detailed(time_points), axis=1))
+        return tree_llhood
 
-    def _calc_tree_lik_detailed(self, time_points): #samples
+    def _calc_tree_lik_detailed(self, time_points):
         node_llhood = []
         for identifier, node in self._nodes.items():
             parent = node.parent
-            #if parent is None:
-            #    node_llhood.append([1, 0])
-            #    continue  ## this is a way of blacklisting clones.
-            if parent:
+            siblings = node.siblings
+            if parent and len(siblings) == 0:
                 def __get_tp_p_parent(tp):
                     node_tp_density = node.data[tp]
-                    node_dist = self.normalize_in_logspace(node_tp_density, in_log_space=False)
                     # do not penalize == parent so pad by 10
-                    parent_dist = self.normalize_in_logspace(parent.data[tp], in_log_space=False)
-                    node_parent_diff = self.normalize_in_logspace(self.diff_ccf(parent_dist, node_dist), in_log_space=False)
-                    return np.log(sum(node_parent_diff[101 - 5:]) + 1e-20) #
+                    node_parent_diff = self.normalize_in_logspace(self.diff_ccf(parent.data[tp], node_tp_density), in_log_space=False)
+                    # TODO positive log likelihood
+                    if np.log(sum(node_parent_diff[101 - 5:]) + 1e-20) > 0.:
+                        return 0.0
+                    else:
+                        return np.log(sum(node_parent_diff[101 - 5:]) + 1e-20)
                 p_parent = np.sum([__get_tp_p_parent(tp) for tp in time_points])
             else:
                 p_parent = 0.
 
-            siblings = node.siblings
             if len(siblings) > 0:
                 def __get_tp_p_sib(tp):
                     convolved_distrib = reduce(np.convolve, [self._nodes[sibling].data[tp] for sibling in siblings])
@@ -213,7 +212,6 @@ class Tree:
             else:
                 p_sib = 0.
             node_llhood.append([p_parent, p_sib])
-        #logging.debug('node_llhood {}'.format(node_llhood))
         return node_llhood
 
     def move_node(self, node_to_move, parent=None, children=None):
@@ -257,7 +255,7 @@ class Tree:
         """
         new_children = []
         # Can only "borrow" up to 3 children of it's potential parent
-        for n_nodes in range(1, min(len(potential_children) + 1, 3)):
+        for n_nodes in range(1, min(len(potential_children) + 1, 4)):
             configuration = list(itertools.combinations(potential_children, n_nodes))
             new_children.extend(configuration)
         logging.debug('Possible configurations {}'.format(new_children))
@@ -272,7 +270,7 @@ class Tree:
             logging.debug('Likelihood before normalization\n{}'.format(dist))
             log_dist = np.array(dist, dtype=np.float64)
             return np.exp(log_dist - logsumexp_scipy(log_dist))
-
+    """
     @staticmethod
     def diff_ccf(ccf1, ccf2, difference=True):
         # reduce(np.convolve, [self.clusters[x][s_idx] for x in siblings])
@@ -280,6 +278,19 @@ class Tree:
             return np.convolve(ccf1, ccf2[::-1])
         else:
             return np.convolve(ccf1, ccf2)
+    """
+    def diff_ccf(self, ccf1, ccf2, difference=True):
+        # Histogram of CCF1-CCF2
+        ccf_dist1 = np.append(ccf1, [0] * len(ccf1))
+        ccf_dist2 = np.append(ccf2, [0] * len(ccf1))
+        convoluted_dist = []
+        for k in range(len(ccf1)):
+            inner_product = np.inner(ccf_dist1[0:len(ccf1)], ccf_dist2[len(ccf1) - 1 - k:2 * len(ccf1) - 1 - k])
+            convoluted_dist.append(inner_product)
+        for k in range(1, len(ccf1)):
+            inner_product = np.inner(ccf_dist2[0:len(ccf1)], ccf_dist1[k:len(ccf1) + k])
+            convoluted_dist.append(inner_product)
+        return np.array(convoluted_dist)
 
     def get_all_possible_moves(self, node_to_move, time_points):
         tree_choices = []
@@ -288,13 +299,11 @@ class Tree:
         tree_choices.append(list(self.edges))
         # Store it's likelihood
         tree_choice_lik.append(self.compute_tree_likelihood(time_points))
-        #logging.debug('Tree edges {} and likelihood {}'.format(list(self.edges), self.compute_tree_likelihood(time_points)))
         # Remove node from it's position the Tree
         self.remove_edges_for_node(node_to_move)
         # Get list of all potential parents (except the root and itself)
         potential_parents = [(node_id, node) for node_id, node in self._nodes.items()
-                             if node_id != self._root.identifier
-                             and node_id != node_to_move.identifier]
+                             if node_id != node_to_move.identifier]
         # Iterate over all potential parents (pp), except root
         for (pp_id, pp_node) in potential_parents:
             logging.debug('Potential parent identifier {}'.format(pp_id))
@@ -303,7 +312,6 @@ class Tree:
             tree_choices.append(list(self.edges))
             # Compute likelihood of this new Tree
             tree_choice_lik.append(self.compute_tree_likelihood(time_points))
-            #logging.debug('Tree edges {} and likelihood {}'.format(list(self.edges), self.compute_tree_likelihood(time_points)))
             # Consider all possible combinations of children
             new_children = self.get_possible_configurations(node_to_move.siblings)
             for children_configuration in new_children:
@@ -315,12 +323,10 @@ class Tree:
                 tree_choices.append(list(self.edges))
                 # Compute likelihood of this new Tree
                 tree_choice_lik.append(self.compute_tree_likelihood(time_points))
-                #logging.debug('Tree edges {} and likelihood {}'.format(list(self.edges), self.compute_tree_likelihood(time_points)))
                 # Reverse the move to get back to the starting Tree
                 for child in children_configuration:
                     self.move_node(self._nodes[child], parent=node_to_move)
             self.remove_edge(pp_node, node_to_move)
-
         tree_choice_lik = self.normalize_in_logspace(tree_choice_lik)
         logging.debug('Tree choice likelihoods \n {}'.format(tree_choice_lik))
         return tree_choices, tree_choice_lik
@@ -330,6 +336,19 @@ class Tree:
         # Clear out children's lists, children will be added in add_edge function
         for node_id, node in self._nodes.items():
             node.remove_all_children()
+        for node_id, node in self._nodes.items():
+            node.remove_parent()
         # Create new edges
         for (parent_id, child_id) in new_edges:
             self.add_edge(self._nodes[parent_id], self._nodes[child_id])
+
+    def get_ancestry(self, node_id):
+        node = self._nodes[node_id]
+        ancestry = [node_id]
+        current_parent = node.parent
+        while current_parent:
+            ancestry.append(current_parent.identifier)
+            current_parent = current_parent.parent
+        logging.debug('Ancestory for node {} is {}'.format(node_id, ancestry[::-1]))
+        return ancestry[::-1]
+
