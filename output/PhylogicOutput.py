@@ -568,6 +568,7 @@ class PhylogicOutput(object):
         """
 
         Returns:
+
         """
         nodes = list(tree.nodes.keys())
         edges = tree.edges
@@ -608,7 +609,7 @@ class PhylogicOutput(object):
                     writer.write('\t'.join(line) + '\n')
 
     @staticmethod
-    def write_constrained_ccf_tsv(constrained_ccf, cells_ancestry, indiv_id):
+    def write_constrained_ccf_tsv(constrained_ccf_configuration, cells_ancestry, indiv_id):
         """
 
         Returns:
@@ -618,8 +619,8 @@ class PhylogicOutput(object):
         header = ['Patient_ID', 'Sample_ID', 'Cell_population', 'Constrained_CCF']
         with open(indiv_id + '_constrained_ccf.tsv', 'w') as writer:
             writer.write('\t'.join(header) + '\n')
-            for (sample_id, constrained_ccf) in constrained_ccf.items():
-                for (cluster_id, abundance) in constrained_ccf.items():
+            for (sample_id, sample_config) in constrained_ccf_configuration.items():
+                for (cluster_id, abundance) in sample_config:
                     population = '_'.join(['CL{}'.format(cl) for cl in cells_ancestry[cluster_id]])
                     line = [indiv_id, sample_id, population, str(abundance)]
                     writer.write('\t'.join(line) + '\n')

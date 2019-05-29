@@ -8,7 +8,7 @@ logging.basicConfig(filename='build_tree_engine.log',
                     filemode='w',
                     format='%(asctime)s - %(levelname)s - %(message)s',
                     datefmt='%d-%b-%y %H:%M:%S',
-                    level=getattr(logging, "DEBUG"))
+                    level=getattr(logging, "INFO"))
 
 CLONAL_CLUSTER = 1
 
@@ -76,7 +76,7 @@ class BuildTreeEngine:
         '''
         tree = self._initialize_tree()
         time_points = self._clustering_results.samples
-        for n in range(n_iter+burn_in):
+        for n in range(n_iter + burn_in):
             # check that it is not None
             logging.debug('Iteration number {}'.format(n))
             # Randomly pick any node to move (except root, which is clonal)
@@ -110,4 +110,3 @@ class BuildTreeEngine:
         for node_id in self._top_tree.nodes:
             cells_ancestry[node_id] = self._top_tree.get_ancestry(node_id)
         return cells_ancestry
-

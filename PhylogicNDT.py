@@ -81,7 +81,6 @@ def build_parser():
     clustering.add_argument('--run_with_BuildTree','-rb',
                         action="store_true",
                         dest='buildtree',
-                        default="false",
                         help='Run the BuildTree Module right after clustering and generate joint report')
 
 

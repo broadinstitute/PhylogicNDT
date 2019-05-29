@@ -21,7 +21,7 @@ class Node:
         '''
         if other is None:
             return False
-        if self._data == other.data: # TODO decide if the same identifiers are also required for equality
+        if self._data == other.data:  # TODO decide if the same identifiers are also required for equality
             return True
         else:
             return False
@@ -60,7 +60,7 @@ class Node:
         if child_id in self._children:
             self._children.remove(child_id)
         else:
-            logging.error('Node %s does not have child with id %s' %(str(child_id), str(self._identifier)))
+            logging.error('Node %s does not have child with id %s' % (str(child_id), str(self._identifier)))
 
     def remove_all_children(self):
         self._children = []

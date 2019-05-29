@@ -3,17 +3,16 @@ import numpy as np
 import itertools
 import pkgutil
 
-#Logsumexp options
-from scipy.misc import logsumexp as logsumexp_scipy # always import as double safe method (slow)
+# Logsumexp options
+from scipy.misc import logsumexp as logsumexp_scipy  # always import as double safe method (slow)
 
 if pkgutil.find_loader('sselogsumexp') is not None:
     logging.info("Using fast logsumexp")
     from sselogsumexp import logsumexp
-    
+
 else:
     logging.info("Using scipy (slower) logsumexp")
     from scipy.misc import logsumexp
-
 
 from Node import Node
 
@@ -184,12 +183,14 @@ class Tree:
                 def __get_tp_p_parent(tp):
                     node_tp_density = node.data[tp]
                     # do not penalize == parent so pad by 10
-                    node_parent_diff = self.normalize_in_logspace(self.diff_ccf(parent.data[tp], node_tp_density), in_log_space=False)
+                    node_parent_diff = self.normalize_in_logspace(self.diff_ccf(parent.data[tp], node_tp_density),
+                                                                  in_log_space=False)
                     # TODO positive log likelihood
                     if np.log(sum(node_parent_diff[101 - 5:]) + 1e-20) > 0.:
                         return 0.0
                     else:
                         return np.log(sum(node_parent_diff[101 - 5:]) + 1e-20)
+
                 p_parent = np.sum([__get_tp_p_parent(tp) for tp in time_points])
             else:
                 p_parent = 0.
@@ -201,13 +202,15 @@ class Tree:
                     if parent:
                         parent_dist = self.normalize_in_logspace(parent.data[tp], in_log_space=False)
                         parent_dist.resize(np.shape(normed_conv_dist))  # fill with zeros
-                        diff_parent_sibling_dist = self.normalize_in_logspace(self.diff_ccf(parent_dist, normed_conv_dist), in_log_space=False)
+                        diff_parent_sibling_dist = self.normalize_in_logspace(
+                            self.diff_ccf(parent_dist, normed_conv_dist), in_log_space=False)
                         # don't penalize == sib, 10 bins
                         # parent - sum < 0 but not equal to 0
                         return np.log(sum(diff_parent_sibling_dist[len(normed_conv_dist) - 5:]) + 1e-20)
                     else:
                         # don't penalize == sib, 5 bins
                         return np.log(sum(normed_conv_dist[:101 + 5]) + 1e-20)
+
                 p_sib = np.sum([__get_tp_p_sib(tp) for tp in time_points])
             else:
                 p_sib = 0.
@@ -243,7 +246,8 @@ class Tree:
             # Add edge between parent of node_to_move and child of node_to_move
             self.add_edge(node_to_move_parent, self._nodes[child_id])
         # now remove edge from parent to the node_to_move
-        logging.debug('Removing edge from node {} to node {}'.format(node_to_move.parent.identifier, node_to_move.identifier))
+        logging.debug(
+            'Removing edge from node {} to node {}'.format(node_to_move.parent.identifier, node_to_move.identifier))
         self.remove_edge(node_to_move_parent, node_to_move)
 
     @staticmethod
@@ -270,6 +274,7 @@ class Tree:
             logging.debug('Likelihood before normalization\n{}'.format(dist))
             log_dist = np.array(dist, dtype=np.float64)
             return np.exp(log_dist - logsumexp_scipy(log_dist))
+
     """
     @staticmethod
     def diff_ccf(ccf1, ccf2, difference=True):
@@ -279,6 +284,7 @@ class Tree:
         else:
             return np.convolve(ccf1, ccf2)
     """
+
     def diff_ccf(self, ccf1, ccf2, difference=True):
         # Histogram of CCF1-CCF2
         ccf_dist1 = np.append(ccf1, [0] * len(ccf1))
@@ -351,4 +357,3 @@ class Tree:
             current_parent = current_parent.parent
         logging.debug('Ancestory for node {} is {}'.format(node_id, ancestry[::-1]))
         return ancestry[::-1]
-

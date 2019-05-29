@@ -8,7 +8,8 @@ logging.basicConfig(filename='build_tree.log',
                     filemode='w',
                     format='%(asctime)s - %(levelname)s - %(message)s',
                     datefmt='%d-%b-%y %H:%M:%S',
-                    level=getattr(logging, "DEBUG"))
+                    level=getattr(logging, "INFO"))
+
 
 # Main run method
 
@@ -36,9 +37,9 @@ def run_tool(args):
     patient_data.TreeEnsemble = bt_engine.trees
 
     cp_engine = CellPopulationEngine(patient_data)
-    constrained_ccf = cp_engine.samples_average_constrained_ccf(args.n_iter)
+    constrained_ccf = cp_engine.samples_average_constrained_ccf()
     cell_ancestry = bt_engine.get_cell_ancestry()
-    cell_abundance = cp_engine.compute_cell_abundance(constrained_ccf, cell_ancestry)
+    cell_abundance = cp_engine.get_cell_abundance(constrained_ccf)
 
     # Output and visualization
     import output.PhylogicOutput

@@ -1,4 +1,5 @@
 import sys
+
 sys.path.append('../')
 
 import logging
@@ -13,7 +14,7 @@ logging.basicConfig(filename='clustering_results.log',
                     filemode='w',
                     format='%(asctime)s - %(levelname)s - %(message)s',
                     datefmt='%d-%b-%y %H:%M:%S',
-                    level=getattr(logging, "DEBUG"))
+                    level=getattr(logging, "INFO"))
 
 
 class Clustering_Results:
@@ -25,7 +26,6 @@ class Clustering_Results:
         self._removed_clusters = []
         self._create_clusters(cluster_info_file)
         self._load_mutations(mut_info_file)
-
 
     def _load_mutations(self, mut_info_file):
         logging.debug('Loading mutations from {} file'.format(mut_info_file))
@@ -58,13 +58,13 @@ class Clustering_Results:
                             self._samples_mutations[sample_id] = []
 
                         mutation = SomaticEvents.SomMutation(chromosome, position, ref, alt, ccf_1d,
-                                               ref_cnt=values[header['t_ref_count']],
-                                               alt_cnt=values[header['t_alt_count']],
-                                               gene=values[header['Hugo_Symbol']],
-                                               prot_change=values[header['Protein_change']],
-                                               mut_category=values[header['Variant_Classification']],
-                                               from_sample=sample_id,
-                                               type_=var_type)
+                                                             ref_cnt=values[header['t_ref_count']],
+                                                             alt_cnt=values[header['t_alt_count']],
+                                                             gene=values[header['Hugo_Symbol']],
+                                                             prot_change=values[header['Protein_change']],
+                                                             mut_category=values[header['Variant_Classification']],
+                                                             from_sample=sample_id,
+                                                             type_=var_type)
 
                         self._cluster_mutations[cluster_id][mutation_str][sample_id] = mutation
                         self._samples_mutations[sample_id].append(mutation_str)

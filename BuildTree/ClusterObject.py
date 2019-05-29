@@ -1,4 +1,3 @@
-
 class Cluster:
 
     def __init__(self, identifier, densities=None, mutations=None):
@@ -69,4 +68,3 @@ class Cluster:
     def add_mutations(self, mutations):
         for mutation in mutations:
             self.add_mutation(mutation)
-
