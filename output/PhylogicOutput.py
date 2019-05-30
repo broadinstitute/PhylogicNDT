@@ -247,7 +247,7 @@ class PhylogicOutput(object):
         child_dict = {None: [tree.root.identifier]}
         for c, node in tree.nodes.items():
             child_dict[c] = node.children
-        pie_plots = []
+        pie_plots = {}
         with open(abundances, 'r') as abun_fh:
             header = abun_fh.readline().strip().split('\t')
             sample_name_idx = header.index('Sample_ID')
@@ -262,12 +262,14 @@ class PhylogicOutput(object):
                 cluster_dict[c]['tumor_abundance'].append(cell_abundance / 100.)
                 if fields[sample_name_idx] != sample_name:
                     if sample_name:
-                        pie_plots.append(self.make_pie_plot(tree, cell_abundances))
+                        pie_plots[sample_name] = self.make_pie_plot(tree, cell_abundances)
                     sample_name = fields[sample_name_idx]
                     cell_abundances = {c: cell_abundance}
                 else:
                     cell_abundances[c] = cell_abundance
-            pie_plots.append(self.make_pie_plot(tree, cell_abundances))
+            pie_plots[sample_name] = self.make_pie_plot(tree, cell_abundances)
+
+        pie_plots = [pie_plots[s] for s in sample_names]
 
         self.write_html_report(patient, sample_names, cluster_dict, aliases=aliases, time_points=timepoints,
                                pie_plots=pie_plots, child_dict=child_dict, tumor_sizes=tumor_sizes,

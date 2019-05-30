@@ -1793,11 +1793,7 @@
               p1 = population[n];
               let d0 = (p0 - population[n - 2]) / h[n - 1],
                 d1 = (p1 - p0) / h[n],
-                d2 = (population[n + 1] - p1) / h[n + 1],
-                w0 = 2 * h[n] + h[n - 1],
-                w1 = 2 * h[n - 1] + h[n],
-                w2 = 2 * h[n + 1] + h[n],
-                w3 = 2 * h[n] + h[n + 1];
+                d2 = (population[n + 1] - p1) / h[n + 1];
               fp0 = n === 1 ? d1 : (d0 + d1) / 2;
               fp1 = n === xlabels.length - 1 ? d1 : (d1 + d2) / 2;
               weights_cache[c][n] = {p0: p0, p1: p1, fp0: fp0, fp1: fp1};
