@@ -2,9 +2,11 @@ import logging
 import numpy as np
 import itertools
 import pkgutil
+import functools
 
+from .Node import Node
 # Logsumexp options
-from scipy.misc import logsumexp as logsumexp_scipy  # always import as double safe method (slow)
+from scipy.special import logsumexp as logsumexp_scipy  # always import as double safe method (slow)
 
 if pkgutil.find_loader('sselogsumexp') is not None:
     logging.info("Using fast logsumexp")
@@ -12,11 +14,7 @@ if pkgutil.find_loader('sselogsumexp') is not None:
 
 else:
     logging.info("Using scipy (slower) logsumexp")
-    from scipy.misc import logsumexp
-
-from Node import Node
-
-logger = logging.getLogger(__name__)
+    from scipy.special import logsumexp
 
 CLONAL_CLUSTER = 1
 
@@ -40,12 +38,8 @@ class Tree:
         return repr(self._edges), [repr(node) for identifier, node in self._nodes.items()]
 
     def add_edge(self, parent, child):
-        '''
-        Args:
-            parent:
-            child:
-        Returns:
-        '''
+        """ Adds edge to the tree (tuple of node's identifiers).
+            Creates new nodes if any missing """
         missing_nodes = [node for node in [parent, child] if node.identifier not in self._nodes]
 
         self.add_nodes(missing_nodes)
@@ -81,20 +75,20 @@ class Tree:
                     child.set_parent(None)
                 else:
                     # TODO add warnings
-                    logger.warning('Child has different parent set')
+                    logging.warning('Child has different parent set')
             else:
                 # TODO add warnings
-                logger.warning('Warning this edge does not exists')
+                logging.warning('Warning this edge does not exists')
         else:
             # TODO add warnings
-            logger.warning('One of the nodes do not exist in the list of nodes')
+            logging.warning('One of the nodes do not exist in the list of nodes')
 
     def add_node(self, identifier, data=None, parent=None, children=None, root=False):
         node = Node(identifier, data, children, parent)
         if identifier not in self._nodes:
             self._nodes[identifier] = node
         else:
-            logger.error('Node with this %s exists in the tree' % str(identifier))
+            logging.error('Node with this %s exists in the tree' % str(identifier))
         if root:
             self._root = node
         return node
@@ -152,7 +146,7 @@ class Tree:
             for child_id in children:
                 curr_children += self._nodes[child_id].children
             children = curr_children
-        logger.debug('Tree levels \n{}'.format(str(tree_levels)))
+        logging.debug('Tree levels \n{}'.format(str(tree_levels)))
         return tree_levels
 
     def traverse_by_branch(self, node=None):
@@ -197,7 +191,8 @@ class Tree:
 
             if len(siblings) > 0:
                 def __get_tp_p_sib(tp):
-                    convolved_distrib = reduce(np.convolve, [self._nodes[sibling].data[tp] for sibling in siblings])
+                    convolved_distrib = functools.reduce(np.convolve,
+                                                         [self._nodes[sibling].data[tp] for sibling in siblings])
                     normed_conv_dist = self.normalize_in_logspace(convolved_distrib, in_log_space=False)
                     if parent:
                         parent_dist = self.normalize_in_logspace(parent.data[tp], in_log_space=False)
@@ -326,15 +321,17 @@ class Tree:
                 for child in children_configuration:
                     self.move_node(self._nodes[child], parent=node_to_move)
                 # Save edges of this new Tree
+                logging.debug('New configuration edges {}'.format(self.edges))
                 tree_choices.append(list(self.edges))
                 # Compute likelihood of this new Tree
                 tree_choice_lik.append(self.compute_tree_likelihood(time_points))
                 # Reverse the move to get back to the starting Tree
                 for child in children_configuration:
-                    self.move_node(self._nodes[child], parent=node_to_move)
+                    self.move_node(self._nodes[child], parent=pp_node)
+                logging.debug('Restored to original edges: {}'.format(self.edges))
             self.remove_edge(pp_node, node_to_move)
         tree_choice_lik = self.normalize_in_logspace(tree_choice_lik)
-        logging.debug('Tree choice likelihoods \n {}'.format(tree_choice_lik))
+        # logging.debug('Tree choice likelihoods: {}'.format(tree_choice_lik))
         return tree_choices, tree_choice_lik
 
     def set_new_edges(self, new_edges):

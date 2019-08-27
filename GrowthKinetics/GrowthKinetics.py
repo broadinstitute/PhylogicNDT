@@ -1,20 +1,24 @@
+import sys
 import logging
 
-logging.basicConfig(filename='build_tree.log',
+sys.path.append('../')
+
+logging.basicConfig(filename='growth_kinetics.log',
                     filemode='w',
                     format='%(asctime)s - %(levelname)s - %(message)s',
                     datefmt='%d-%b-%y %H:%M:%S',
-                    level=getattr(logging, "INFO"))
+                    level=getattr(logging, "DEBUG"))
 
 
 # Main run method
+
 def run_tool(args):
     logging.debug('Arguments {}'.format(args))
 
     import data.Patient as Patient
-    from .CellPopulationEngine import CellPopulationEngine
-    from .BuildTreeEngine import BuildTreeEngine
-    from .ClusteringResults import ClusteringResults
+    from BuildTree.CellPopulationEngine import CellPopulationEngine
+    from BuildTree.BuildTreeEngine import BuildTreeEngine
+    from BuildTree.ClusteringResults import ClusteringResults
 
     # init a Patient
     patient_data = Patient.Patient(indiv_name=args.indiv_id, driver_genes_file=args.driver_genes_file)
@@ -31,9 +35,9 @@ def run_tool(args):
     patient_data.TreeEnsemble = bt_engine.trees
 
     cp_engine = CellPopulationEngine(patient_data)
-    constrained_ccf = cp_engine.samples_average_constrained_ccf()
+    constrained_ccf = cp_engine.samples_average_constrained_ccf(args.n_iter)
     cell_ancestry = bt_engine.get_cell_ancestry()
-    cell_abundance = cp_engine.get_cell_abundance(constrained_ccf)
+    cell_abundance = cp_engine.compute_cell_abundance(constrained_ccf, cell_ancestry)
 
     # Output and visualization
     import output.PhylogicOutput
@@ -43,7 +47,6 @@ def run_tool(args):
     phylogicoutput.write_cell_abundances_tsv(cell_abundance, cell_ancestry, args.indiv_id)
     phylogicoutput.generate_html_from_tree(args.mutation_ccf_file, args.cluster_ccf_file,
                                            args.indiv_id + '_build_tree_posteriors.tsv',
-                                           args.indiv_id + '_constrained_ccf.tsv', sif=args.sif,
+                                           args.indiv_id + '_constrained_CCF.tsv', sif=args.sif,
                                            drivers=patient_data.driver_genes,
-                                           treatment_file=args.treatment_data, tumor_sizes_file=args.tumor_size,
-                                           cnv_file=args.indiv_id + '.cnvs.txt')
+                                           treatment_file=args.treatment_data)

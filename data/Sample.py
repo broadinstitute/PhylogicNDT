@@ -7,10 +7,11 @@ import sys
 import logging
 import collections
 import numpy as np
+from intervaltree import Interval, IntervalTree
 
 from scipy.interpolate import interp1d
 
-from SomaticEvents import SomMutation
+from SomaticEvents import SomMutation, CopyNumberEvent
 
 na_values = {'-1.#IND', '1.#QNAN', '1.#IND', '-1.#QNAN', '#N/A', 'N/A', 'NA', '#NA', 'NULL', 'NaN', '-NaN', 'nan',
              '-nan', ''}  # http://pandas.pydata.org/pandas-docs/stable/io.html#na-values
@@ -67,8 +68,13 @@ class TumorSample:
         self._mut_varstring_hashtable = {}  # a dictionary hash table for fast var_str lookup
         self.private_mutations = []
         self.artifacts_in_blacklist = []
-        self.known_blacklisted_mut = set()
-        self._whitelist = artifact_whitelist
+        with open(artifact_blacklist, 'r') as f:
+            self.known_blacklisted_mut = {m.replace('\t', ':').strip() for m in f}
+        if os.path.exists(artifact_whitelist):
+            with open(artifact_whitelist) as f:
+                self._whitelist = {m.replace('\t', ':').strip() for m in f}
+        else:
+            self._whitelist = None
 
         # Both are a dict for easy lookup later.
         self.low_coverage_mutations = {}
@@ -79,15 +85,12 @@ class TumorSample:
                                                _additional_muts=_additional_muts)  # a list of SomMutation objects
 
         #TODO
-        #self.CnEvents = self._resolve_CnEvents(file_name, input_type, min_coverage=min_coverage, use_indels=use_indels,
-        #                                       _additional_muts=_additional_muts)  # a list of CopyNumberEvent objects
-        #self.CnProfile = self._load_CnProfile(file_name, input_type, min_coverage=min_coverage, use_indels=use_indels,
-        #                                      _additional_muts=_additional_muts)  # a list of CopyNumberEvent objects
+        self.CnProfile = self._resolve_CnEvents(seg_file, input_type=seg_input_type)
 
         # @results
         self.ClustersPostMarginal = None  # format F[Cluster] = CCF post hist
 
-        # self.concordant_variants = []  # store variants concordant with other tumor samples
+        self.concordant_variants = []  # store variants concordant with other tumor samples
         # self.concordant_with_samples = []  # store  with other tumor samples were used for variants concordance
 
 
@@ -155,6 +158,7 @@ class TumorSample:
                 mut.ccf_grid_size = self.ccf_grid_size
 
             if mut.var_str in self.known_blacklisted_mut:
+                logging.info("Removed mut " + mut.var_str + " in " + self.sample_name)
                 mut.blacklist_status = True
 
             print mut.gene, mut.prot_change, ";",
@@ -268,7 +272,11 @@ class TumorSample:
             if calc_ccf:
                 ccf = [float("NaN")] * self.ccf_grid_size  # calculate after creation.
             else:
-                ccf = [float(spl[x]) for x in ccf_bins_location]  # assume ccf at the end of the split since headers vary for this one.
+                try:
+                    ccf = [float(spl[x]) for x in ccf_bins_location]  # assume ccf at the end of the split since headers vary for this one.
+                except ValueError:
+                    logging.warning('Mutation with no CCF estimate... skipping')
+                    continue
 
             #print len(ccf)
             if len(ccf)!=101: raise ValueError("Number of CCF bins values read for this variant are less than 101 bins !")
@@ -357,3 +365,52 @@ class TumorSample:
             return 'sqlite'
         else:
             raise IOError("ERROR: Cannot guess file type please use .RData, .txt, .tsv, .tab or .db")
+
+    def add_muts_to_hashtable(self, muts):
+        if hasattr(muts, '__iter__'):
+            self._mut_varstring_hashtable.update((mut.var_str, mut) for mut in muts)
+        else:
+            self._mut_varstring_hashtable[muts.var_str] = muts
+
+    def _resolve_CnEvents(self, seg_file, input_type='auto'):
+        if input_type == 'auto':
+            if not seg_file:
+                input_type = 'none'
+            elif seg_file.endswith('.segtab.txt') or seg_file.endswith('.seg.txt'):
+                input_type = 'absolute'
+            elif seg_file.endswith('.tsv'):
+                input_type = 'alleliccapseg'
+            else:
+                input_type = 'moo'
+
+        seg_tree = {chrom: IntervalTree() for chrom in list(map(str, range(1, 23)))+['X', 'Y']}
+
+        if input_type == 'none':
+            return None
+        elif input_type == 'absolute':
+            with open(seg_file, 'r') as fh:
+                header = fh.readline().strip('\n').split('\t')
+                for line in fh:
+                    try:
+                        row = dict(zip(header, line.strip('\n').split('\t')))
+                        chrN = row['Chromosome']
+                        start = int(row['Start.bp'])
+                        end = int(row['End.bp'])
+                        ccf_hat_a1 = float(row['cancer.cell.frac.a1'])
+                        ccf_high_a1 = float(row['ccf.ci95.high.a1'])
+                        ccf_low_a1 = float(row['ccf.ci95.low.a1'])
+                        ccf_hat_a2 = float(row['cancer.cell.frac.a2'])
+                        ccf_high_a2 = float(row['ccf.ci95.high.a2'])
+                        ccf_low_a2 = float(row['ccf.ci95.low.a2'])
+                        local_cn_a1 = int(row['modal.a1'])
+                        local_cn_a2 = int(row['modal.a2'])
+                        seg_tree[chrN].add(Interval(start, end,
+                            (self.sample_name, {'cn_a1': local_cn_a1, 'cn_a2': local_cn_a2, 'ccf_hat_a1': ccf_hat_a1,
+                                'ccf_high_a1': ccf_high_a1, 'ccf_low_a1': ccf_low_a1, 'ccf_hat_a2': ccf_hat_a2,
+                                'ccf_high_a2': ccf_high_a2, 'ccf_low_a2': ccf_low_a2})))
+                    except ValueError:
+                        continue
+        else:
+            raise NotImplementedError('Can only read absolute segtab file')
+
+        return seg_tree

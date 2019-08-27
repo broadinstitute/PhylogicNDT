@@ -2,13 +2,7 @@ import numpy as np
 import logging
 import operator
 import collections
-from Tree import Tree
-
-logging.basicConfig(filename='build_tree_engine.log',
-                    filemode='w',
-                    format='%(asctime)s - %(levelname)s - %(message)s',
-                    datefmt='%d-%b-%y %H:%M:%S',
-                    level=getattr(logging, "INFO"))
+from .Tree import Tree
 
 CLONAL_CLUSTER = 1
 
@@ -16,10 +10,7 @@ CLONAL_CLUSTER = 1
 class BuildTreeEngine:
 
     def __init__(self, patient):
-        '''
-        Args:
-            patient:
-        '''
+        """ """
         # patient object should have pointer to clustering results object but for now it is two separate objects
         self._patient = patient
         if patient.ClusteringResults:
@@ -68,17 +59,16 @@ class BuildTreeEngine:
         logging.debug('Tree initialized with edges {}'.format(tree.edges))
         return tree
 
-    def build_tree(self, n_iter=1000, burn_in=10):
-        '''
-        Main function to construct phylogenetic tree
-        Returns:
-
-        '''
+    def build_tree(self, n_iter=250, burn_in=100):
+        """ Main function to construct phylogenetic tree """
         tree = self._initialize_tree()
         time_points = self._clustering_results.samples
         for n in range(n_iter + burn_in):
             # check that it is not None
-            logging.debug('Iteration number {}'.format(n))
+            if n <= burn_in:
+                logging.debug('Burn-in iteration {}'.format(n))
+            else:
+                logging.debug('Iteration number {}'.format(n))
             # Randomly pick any node to move (except root, which is clonal)
             node_to_move = tree.get_random_node()
             logging.debug('Node to move {}'.format(node_to_move.identifier))
@@ -98,7 +88,15 @@ class BuildTreeEngine:
         self._set_top_tree()
 
     def _set_top_tree(self):
-        top_tree_edges = self._mcmc_trace[np.argmax(self._ll_trail)]
+        top_tree_edges = self.mcmc_trace[0][0]
+        most_likely_tree_edges = self._mcmc_trace[np.argmax(self._ll_trail)]
+        most_likely_tree_edges.sort()
+        logging.debug('Most likely tree edges \n{}'.format(str(most_likely_tree_edges)))
+        top_tree_edges = list(self.mcmc_trace[0][0])
+        top_tree_edges.sort()
+        edges_equality = (most_likely_tree_edges == top_tree_edges)
+        logging.debug('The most likely tree edges \n{}'.format(str(most_likely_tree_edges)))
+        logging.debug('The most likely tree and the most common trees are the same {}'.format(str(edges_equality)))
         self._top_tree = self._initialize_tree(top_tree_edges)
 
     @property

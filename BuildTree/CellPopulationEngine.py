@@ -6,15 +6,6 @@ import itertools
 import operator
 import logging
 
-# add as command line parameter
-np.random.seed()
-
-logging.basicConfig(filename='cell_population_engine.log',
-                    filemode='w',
-                    format='%(asctime)s - %(levelname)s - %(message)s',
-                    datefmt='%d-%b-%y %H:%M:%S',
-                    level=getattr(logging, "INFO"))
-
 
 class CellPopulationEngine:
 
@@ -84,8 +75,7 @@ class CellPopulationEngine:
 
     def sample_node_ccf(self, node, cluster_ccf, iter_ccf, hist):
         constrained_cluster_distribution = self.compute_node_constrained_distribution(node, cluster_ccf, iter_ccf, hist)
-        logging.debug(
-            'Constrained distribution for node {} is \n{}'.format(node.identifier, constrained_cluster_distribution))
+        # logging.debug('Constrained distribution for node {} is \n{}'.format(node.identifier, constrained_cluster_distribution))
         if constrained_cluster_distribution is not None:
             return self.sample_ccf(hist, constrained_cluster_distribution)
         else:
@@ -101,7 +91,7 @@ class CellPopulationEngine:
         most_frequent = sorted(counts.items(), key=operator.itemgetter(1), reverse=True)[0]
         return sorted(most_frequent[0], key=operator.itemgetter(0)), most_frequent[1]
 
-    def clusters_constrained_ccf(self, sample_clusters_ccf, tree_levels, n_iter=100):
+    def clusters_constrained_ccf(self, sample_clusters_ccf, tree_levels, n_iter=500):
         '''
 
         Args:
@@ -138,7 +128,7 @@ class CellPopulationEngine:
             sample_cluster_densities[c] = clusters_ccf[c].densities[sample_id]
         return sample_cluster_densities
 
-    def samples_average_constrained_ccf(self, n_iter=10000):
+    def samples_average_constrained_ccf(self, n_iter=500):
         """
         For each sample, iterates over clusters and computes average constrained ccf for that cluster
         :param n_iter:

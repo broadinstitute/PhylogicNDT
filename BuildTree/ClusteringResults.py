@@ -1,23 +1,13 @@
-import sys
-
-sys.path.append('../')
-
 import logging
 import numpy as np
 
-from scipy.misc import logsumexp as logsumexp_scipy
+from scipy.special import logsumexp as logsumexp_scipy
 
 import data.SomaticEvents as SomaticEvents
-from ClusterObject import Cluster
-
-logging.basicConfig(filename='clustering_results.log',
-                    filemode='w',
-                    format='%(asctime)s - %(levelname)s - %(message)s',
-                    datefmt='%d-%b-%y %H:%M:%S',
-                    level=getattr(logging, "INFO"))
+from .ClusterObject import Cluster
 
 
-class Clustering_Results:
+class ClusteringResults:
 
     def __init__(self, mut_info_file, cluster_info_file):
         self._cluster_mutations = {}
@@ -29,13 +19,14 @@ class Clustering_Results:
 
     def _load_mutations(self, mut_info_file):
         logging.debug('Loading mutations from {} file'.format(mut_info_file))
-        ccf_headers = ['preDP_ccf_' + str(i / 100.0) for i in xrange(0, 101, 1)]
+        ccf_headers = ['preDP_ccf_' + str(i / 100.0) for i in range(0, 101, 1)]
         with open(mut_info_file, 'r') as reader:
             for line in reader:
                 values = line.strip().split('\t')
                 if line.startswith('Patient_ID'):
                     header = dict((item, idx) for idx, item in enumerate(values))
-                else:
+                elif values[header['Variant_Type']] != 'CNV':
+                    # TODO: for reshuffling need to keep all mutations and clusters
                     cluster_id = int(values[header['Cluster_Assignment']])
                     if cluster_id not in self._removed_clusters:
                         chromosome = values[header['Chromosome']]
@@ -56,10 +47,12 @@ class Clustering_Results:
 
                         if sample_id not in self._samples_mutations:
                             self._samples_mutations[sample_id] = []
+                        t_ref_count = self._get_count(values[header['t_ref_count']])
+                        t_alt_count = self._get_count(values[header['t_alt_count']])
 
                         mutation = SomaticEvents.SomMutation(chromosome, position, ref, alt, ccf_1d,
-                                                             ref_cnt=values[header['t_ref_count']],
-                                                             alt_cnt=values[header['t_alt_count']],
+                                                             ref_cnt=t_ref_count,
+                                                             alt_cnt=t_alt_count,
                                                              gene=values[header['Hugo_Symbol']],
                                                              prot_change=values[header['Protein_change']],
                                                              mut_category=values[header['Variant_Classification']],
@@ -71,11 +64,18 @@ class Clustering_Results:
                         self._clusters[cluster_id].add_mutation(mutation)
                         logging.info('Mutation {} loaded from sample {}'.format(mutation_str, sample_id))
 
+    @staticmethod
+    def _get_count(count):
+        try:
+            return float(count)
+        except ValueError:
+            return None
+
     def _load_clusters(self, cluster_info_file):
         logging.debug('Loading clusters from {} file'.format(cluster_info_file))
         cluster_ccf = {}
         means = {}
-        ccf_headers = ['postDP_ccf_' + str(i / 100.0) for i in xrange(0, 101, 1)]
+        ccf_headers = ['postDP_ccf_' + str(i / 100.0) for i in range(0, 101, 1)]
         with open(cluster_info_file, 'r') as reader:
             for line in reader:
                 values = line.strip().split('\t')
