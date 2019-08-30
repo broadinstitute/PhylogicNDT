@@ -2,10 +2,13 @@
 ## Patient - central class to handle and store sample CCF data
 ##########################################################
 from Sample import TumorSample
+from SomaticEvents import SomMutation, CopyNumberEvent
 import os
 import logging
 import itertools
+import functools
 import numpy as np
+from intervaltree import Interval, IntervalTree
 
 #Logsumexp options
 import pkgutil
@@ -62,8 +65,8 @@ class Patient:
         self.ccf_grid_size = ccf_grid_size
 
         # @annatotion
-        self.PatientLevel_MutBlacklist = None
-        self.PatientLevel_MutWhitelist = None
+        self.PatientLevel_MutBlacklist = artifact_blacklist
+        self.PatientLevel_MutWhitelist = artifact_whitelist
 
         #Patient configuration settings
 
@@ -89,6 +92,11 @@ class Patient:
         self.MCMC_trace=None
         self.k_trace=None
         self.alpha_trace=None
+
+        self.unclustered_muts = []
+
+        # self.concordant_cn_events = []
+        self.concordant_cn_tree = {chrom: IntervalTree() for chrom in list(map(str, range(1, 23)))+['X', 'Y']}
 
         #BuildTree
         self.TopTree=None
@@ -125,8 +133,8 @@ class Patient:
 
     #main clean and init function
     def homogenize_events_across_samples(self):
-        self.sample_list
-        UserWarning("Found one sample! Will run 1D clustering. If intentended to run ND, please fix!")
+        if len(self.sample_list)==1:
+            UserWarning("Found one sample! Will run 1D clustering. If intentended to run ND, please fix!")
 
 
 
@@ -295,64 +303,291 @@ class Patient:
 
         return NDHistogram(combined_ccf, [x.var_str for x in self.sample_list[0].concordant_variants])
 
+    def cluster_temp_removed(self):
+        clust_CCF_results = self.ClusteringResults.clust_CCF_dens
+        for mut in self.sample_list[0].low_coverage_mutations.values():
+            mut_coincidence = np.ones(len(clust_CCF_results))
+            for i, sample in enumerate(self.sample_list):
+                try:
+                    mut = sample.get_mut_by_varstr(mut.var_str)
+                except KeyError:
+                    logging.warning(mut.var_str + ' not called across all samples')
+                    mut_coincidence.fill(np.nan)
+                    break
+                for ii, cluster_ccfs in enumerate(clust_CCF_results):
+                    cluster_ccf = cluster_ccfs[i]
+                    if abs(np.argmax(mut.ccf_1d) - np.argmax(cluster_ccf)) > 50:
+                        dot = 0.
+                    else:
+                        dot = max(sum(np.array(mut.ccf_1d) * cluster_ccf), .0001)
+                    mut_coincidence[ii] *= dot
+            if np.any(mut_coincidence > 0.):
+                cluster_assignment = np.argmax(mut_coincidence) + 1
+                for i, sample in enumerate(self.sample_list):
+                    mut = sample.get_mut_by_varstr(mut.var_str)
+                    mut.cluster_assignment = cluster_assignment
+                    mut.clust_ccf = clust_CCF_results[cluster_assignment - 1][i]
+            elif not np.any(np.isnan(mut_coincidence)):
+                self.unclustered_muts.append(mut)
+
+    def intersect_cn_trees(self):
+        def get_bands(chrom, start, end, cytoband=os.path.dirname(__file__) + '/supplement_data/cytoBand.txt'):
+            bands = []
+            on_c = False
+            with open(cytoband, 'r') as f:
+                for line in f:
+                    row = line.strip('\n').split('\t')
+                    if row[0].strip('chr') != str(chrom):
+                        if on_c:
+                            return bands
+                        continue
+                    if int(row[1]) <= end and int(row[2]) >= start:
+                        bands.append(Cytoband(chrom, row[3]))
+                        on_c = True
+                    if int(row[1]) > end:
+                        return bands
+
+        def merge_cn_events(event_segs, neighbors, R=frozenset(), X=frozenset()):
+            is_max = True
+            for s in itertools.chain(event_segs, X):
+                if isadjacent(s, R):
+                    is_max = False
+                    break
+            if is_max:
+                bands = set.union(*(set(b[0]) for b in R))
+                cns = next(iter(R))[1]
+                ccf_hat = np.zeros(len(self.sample_list))
+                ccf_high = np.zeros(len(self.sample_list))
+                ccf_low = np.zeros(len(self.sample_list))
+                for seg in R:
+                    ccf_hat += np.array(seg[2])
+                    ccf_high += np.array(seg[3])
+                    ccf_low += np.array(seg[4])
+                yield (bands, cns, ccf_hat / len(R), ccf_high / len(R), ccf_low / len(R))
+            else:
+                for s in min((event_segs - neighbors[p] for p in event_segs.union(X)), key=len):
+                    if isadjacent(s, R):
+                        for region in merge_cn_events(event_segs.intersection(neighbors[s]), neighbors, R=R.union({s}),
+                                                      X=X.intersection(neighbors[s])):
+                            yield region
+                        event_segs = event_segs.difference({s})
+                        X = X.union({s})
+
+        def isadjacent(s, R):
+            if not R:
+                return True
+            Rchain = list(itertools.chain(*(b[0] for b in R)))
+            minR = min(Rchain)
+            maxR = max(Rchain)
+            mins = min(s[0])
+            maxs = max(s[0])
+            if mins >= maxR:
+                return mins - maxR <= 1 and mins.band[0] == maxR.band[0]
+            elif maxs <= minR:
+                return minR - maxs <= 1 and maxs.band[0] == minR.band[0]
+            else:
+                return False
+
+        c_trees = {}
+        n_samples = len(self.sample_list)
+        for chrom in list(map(str, range(1, 23)))+['X', 'Y']:
+            tree = IntervalTree()
+            for sample in self.sample_list:
+                if sample.CnProfile:
+                    tree.update(sample.CnProfile[chrom])
+            tree.split_overlaps()
+            tree.merge_equals(data_initializer=[], data_reducer=lambda a, c: a + [c])
+            c_tree = IntervalTree(filter(lambda s: len(s.data) == n_samples, tree))
+            c_trees[chrom] = c_tree
+            event_segs = set()
+            for seg in c_tree:
+                start = seg.begin
+                end = seg.end
+                bands = get_bands(chrom, start, end)
+                cns_a1 = []
+                cns_a2 = []
+                ccf_hat_a1 = []
+                ccf_hat_a2 = []
+                ccf_high_a1 = []
+                ccf_high_a2 = []
+                ccf_low_a1 = []
+                ccf_low_a2 = []
+                for i, sample in enumerate(self.sample_list):
+                    cns_a1.append(seg.data[i][1]['cn_a1'])
+                    cns_a2.append(seg.data[i][1]['cn_a2'])
+                    ccf_hat_a1.append(seg.data[i][1]['ccf_hat_a1'] if seg.data[i][1]['cn_a1'] != 1 else 0.)
+                    ccf_hat_a2.append(seg.data[i][1]['ccf_hat_a2'] if seg.data[i][1]['cn_a2'] != 1 else 0.)
+                    ccf_high_a1.append(seg.data[i][1]['ccf_high_a1'] if seg.data[i][1]['cn_a1'] != 1 else 0.)
+                    ccf_high_a2.append(seg.data[i][1]['ccf_high_a2'] if seg.data[i][1]['cn_a2'] != 1 else 0.)
+                    ccf_low_a1.append(seg.data[i][1]['ccf_low_a1'] if seg.data[i][1]['cn_a1'] != 1 else 0.)
+                    ccf_low_a2.append(seg.data[i][1]['ccf_low_a2'] if seg.data[i][1]['cn_a2'] != 1 else 0.)
+                cns_a1 = np.array(cns_a1)
+                cns_a2 = np.array(cns_a2)
+                if np.all(cns_a1 == 1):
+                    pass
+                elif np.all(cns_a1 >= 1) or np.all(cns_a1 <= 1):
+                    event_segs.add((tuple(bands), tuple(cns_a1), tuple(ccf_hat_a1), tuple(ccf_high_a1), tuple(ccf_low_a1), 'a1'))
+                else:
+                    logging.warning('Seg with inconsistent event: {}:{}:{}'.format(chrom, seg.begin, seg.end))
+                if np.all(cns_a2 == 1):
+                    pass
+                elif np.all(cns_a2 >= 1) or np.all(cns_a2 <= 1):
+                    event_segs.add((tuple(bands), tuple(cns_a2), tuple(ccf_hat_a2), tuple(ccf_high_a2), tuple(ccf_low_a2), 'a2'))
+                else:
+                    logging.warning('Seg with inconsistent event: {}:{}:{}'.format(chrom, seg.begin, seg.end))
+            neighbors = {s: set() for s in event_segs}
+            for seg1, seg2 in itertools.combinations(event_segs, 2):
+                s1_hat = np.array(seg1[2])
+                s2_hat = np.array(seg2[2])
+                if seg1[1] == seg2[1] and np.all(s1_hat >= np.array(seg2[4])) and np.all(s1_hat <= np.array(seg2[3]))\
+                and np.all(s2_hat >= np.array(seg1[4])) and np.all(s2_hat <= np.array(seg1[3])):
+                    neighbors[seg1].add(seg2)
+                    neighbors[seg2].add(seg1)
+
+            event_cache = []
+            if event_segs:
+                for bands, cns, ccf_hat, ccf_high, ccf_low in merge_cn_events(event_segs, neighbors):
+                    mut_category = 'gain' if sum(cns) > len(self.sample_list) else 'loss'
+                    a1 = (mut_category, bands) not in event_cache
+                    if a1:
+                        event_cache.append((mut_category, bands))
+                    self._add_cn_event_to_samples(chrom, min(bands), max(bands), cns, mut_category, ccf_hat, ccf_high,
+                        ccf_low, a1, dupe=not a1)
+        self.concordant_cn_tree = c_trees
+
+    def _add_cn_event_to_samples(self, chrom, start, end, cns, mut_category, ccf_hat, ccf_high, ccf_low, a1, dupe=False):
+        for i, sample in enumerate(self.sample_list):
+            local_cn = cns[i]
+            ccf_hat_i = ccf_hat[i] if local_cn != 1. else 0.
+            ccf_high_i = ccf_high[i] if local_cn != 1. else 0.
+            ccf_low_i = ccf_low[i] if local_cn != 1. else 0.
+            cn = CopyNumberEvent(chrom, start, end, ccf_hat=ccf_hat_i, ccf_high=ccf_high_i, ccf_low=ccf_low_i,
+                                 local_cn=local_cn, from_sample=sample, a1=a1, mut_category=mut_category, dupe=dupe)
+            sample.low_coverage_mutations.update({cn.var_str: cn})
+            sample.add_muts_to_hashtable(cn)
+
 
 #################################################################################
 ##NDHistogram() - helper class to store combined histograms of mutations to pass to DP
 #################################################################################
 class NDHistogram:
-	"""CLASS info
+    """CLASS info
 
-	FUNCTIONS:
+    FUNCTIONS:
 
-	PROPERTIES:
-	"""
+    PROPERTIES:
+    """
 
-	def __init__(self, hist_array, labels, phasing=None, ignore_nan=False):
-		conv = 1e-40
+    def __init__(self, hist_array, labels, phasing=None, ignore_nan=False):
+        conv = 1e-40
 
-		### We need to noramlize the array to 1. This is hard.
-		### This step does the following:
-		##### convert to log space after adding a small convolution paramter so we don't get INF and NAN
-		##### for each mutation
-		##### normalize the row to 1 in logspace.
+        ### We need to noramlize the array to 1. This is hard.
+        ### This step does the following:
+        ##### convert to log space after adding a small convolution paramter so we don't get INF and NAN
+        ##### for each mutation
+        ##### normalize the row to 1 in logspace.
 
-		hist = np.asarray(hist_array, dtype=np.float32) + conv
-		if (~(hist > 0)).any():
-			logging.error("Negative histogram bin or NAN mutation!")
-			if ignore_nan:
-				logging.warning("Caught ignore nan flag, not exiting, setting nan values to zero")
-				hist[np.logical_not(hist > 0)] = conv
-			else:
-				sys.exit(1)
+        hist = np.asarray(hist_array, dtype=np.float32) + conv
+        if (~(hist > 0)).any():
+            logging.error("Negative histogram bin or NAN mutation!")
+            if ignore_nan:
+                logging.warning("Caught ignore nan flag, not exiting, setting nan values to zero")
+                hist[np.logical_not(hist > 0)] = conv
+            else:
+                sys.exit(1)
 
-		n_samples = np.shape(hist)[1]
-		for sample in range(n_samples):
-			hist[:,:,0]=conv ##set zero bins
-		self._hist_array = np.apply_over_axes(lambda x, y: np.apply_along_axis(lambda z: z - logsumexp(z), y, x),
-											  np.log(hist), 2)
-		####
+        n_samples = np.shape(hist)[1]
+        for sample in range(n_samples):
+            hist[:,:,0]=conv ##set zero bins
+        self._hist_array = np.apply_over_axes(lambda x, y: np.apply_along_axis(lambda z: z - logsumexp(z), y, x),
+                                              np.log(hist), 2)
+        ####
 
 
 
-		self._labels = labels
-		self._label_ids = dict([[y, x] for x, y in enumerate(labels)])
-		self._phasing = {} if phasing is None else phasing
-		self.n_samples = np.shape(hist_array)[1]
-		self.n_bins = np.shape(hist_array)[-1]
+        self._labels = labels
+        self._label_ids = dict([[y, x] for x, y in enumerate(labels)])
+        self._phasing = {} if phasing is None else phasing
+        self.n_samples = np.shape(hist_array)[1]
+        self.n_bins = np.shape(hist_array)[-1]
 
-	def __getitem__(self, key):
-		return self._hist_array[self._label_ids[key]]
+    def __getitem__(self, key):
+        return self._hist_array[self._label_ids[key]]
 
-	def phase(self, m1, m2):
-		return self._phasing[frozenset({m1, m2})]
+    def phase(self, m1, m2):
+        return self._phasing[frozenset({m1, m2})]
 
-	def iteritems(self):
-		for idx, mut in enumerate(self._hist_array):
-			yield self._labels[idx], mut
+    def iteritems(self):
+        for idx, mut in enumerate(self._hist_array):
+            yield self._labels[idx], mut
 
-	@property
-	def mutations(self):
-		return {}
+    @property
+    def mutations(self):
+        return {}
+
+
+class Cytoband:
+
+    def __init__(self, chrom, band):
+        self.chrom = chrom
+        self.band = band
+
+    def __sub__(self, other):
+        if not isinstance(other, Cytoband):
+            raise TypeError('Cannot subtract Cytoband with ' + str(type(other)))
+        if self.chrom == other.chrom:
+            self_num = -1
+            other_num = -1
+            with open(os.path.dirname(__file__)+'/supplement_data/cytoBand.txt', 'r') as f:
+                for i, line in enumerate(f):
+                    row = line.strip('\n').split('\t')
+                    if row[0] == 'chr' + str(self.chrom) and row[3] == self.band:
+                        self_num = i
+                    if row[0] == 'chr' + str(other.chrom) and row[3] == other.band:
+                        other_num = i
+                    if self_num >= 0 and other_num >= 0:
+                        return self_num - other_num
+        raise ValueError('Cannot subtract cytobands on different chromosomes')
+
+    def __lt__(self, other):
+        if not isinstance(other, Cytoband):
+            raise TypeError('Cannot compare Cytoband with ' + str(type(other)))
+        if self.chrom == other.chrom:
+            return self - other < 0
+        raise ValueError('Cannot compare cytobands on different chromosomes')
+
+    def __gt__(self, other):
+        if not isinstance(other, Cytoband):
+            raise TypeError('Cannot compare Cytoband with ' + str(type(other)))
+        if self.chrom == other.chrom:
+            return self - other > 0
+        raise ValueError('Cannot compare cytobands on different chromosomes')
+
+    def __le__(self, other):
+        if not isinstance(other, Cytoband):
+            raise TypeError('Cannot compare Cytoband with ' + str(type(other)))
+        if self.chrom == other.chrom:
+            return self - other <= 0
+        raise ValueError('Cannot compare cytobands on different chromosomes')
+
+    def __ge__(self, other):
+        if not isinstance(other, Cytoband):
+            raise TypeError('Cannot compare Cytoband with ' + str(type(other)))
+        if self.chrom == other.chrom:
+            return self - other >= 0
+        raise ValueError('Cannot compare cytobands on different chromosomes')
+
+    def __eq__(self, other):
+        if not isinstance(other, Cytoband):
+            raise TypeError('Cannot compare Cytoband with ' + str(type(other)))
+        return hash(self) == hash(other)
+
+    def __hash__(self):
+        return hash((self.chrom, self.band))
+
+    def __repr__(self):
+        return str(self.chrom) + self.band
+
 
 
 ##############################################################

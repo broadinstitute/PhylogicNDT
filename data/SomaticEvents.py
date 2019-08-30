@@ -5,6 +5,7 @@ import logging
 from intervaltree import IntervalTree
 
 import numpy as np
+import scipy.stats
 
 ##########################################################
 ##Patient's SomaticEvent() - class to store "virtual" mutation on Patient level
@@ -232,12 +233,15 @@ class CopyNumberEvent():
 
             @property methods: none
     """
+    ref = '-'
+    alt = '-'
+    ref_cnt = ''
+    alt_cnt = ''
+    prot_change = ''
 
-    def __init__(self, chrN, pos, ref, alt, ccf_1d, ref_cnt=None, alt_cnt=None, gene=None, prot_change=None,
-                 mut_category=None, det_power=None, from_sample=None, type_=None, clonality=None, on_arm_event=None,
-                 seg_tree=None, clust_ccf=None, multiplicity=np.nan, local_cn_a1=np.nan, local_cn_a2=np.nan,
-                 type_local_cn_event=np.nan,
-                 clonal_cut_off=0.86):
+    def __init__(self, chrN, start, end, ccf_1d=None, ccf_hat=None, ccf_high=None, ccf_low=None, std=None,
+                 from_sample=None, seg_tree=None, clust_ccf=None, local_cn=np.nan, a1=True, mut_category='None',
+                 dupe=False):
 
         # try:
         # Link to sample object.
@@ -245,14 +249,88 @@ class CopyNumberEvent():
 
         # Basic properties of mutation
         self.chrN = chrN
-        self.pos = int(float(pos)) # start
-        self.start =self.pos
-        # TODO: define end in constructor
-        #self.end =int(float(end))
+        self.start = start
+        self.end = end
+        if ccf_1d:
+            self.ccf_1d = ccf_1d
+        else:
+            std = std if std is not None else (ccf_high - ccf_low) / 4.
+            if ccf_hat <= std:
+                self.ccf_1d = np.insert(np.zeros(100), 0, 1.)
+            elif ccf_hat >= 1.-std:
+                self.ccf_1d = np.append(np.zeros(100), 1.)
+            else:
+                alpha = ccf_hat * ccf_hat * ((1 - ccf_hat) / (std * std) - (1 / ccf_hat))
+                beta = alpha * ((1 / ccf_hat) - 1)
+                if alpha < 1.:
+                    self.ccf_1d = np.insert(np.zeros(100), 0, 1.)
+                elif beta < 1.:
+                    self.ccf_1d = np.append(np.zeros(100), 1.)
+                else:
+                    self.ccf_1d = scipy.stats.beta.pdf(np.arange(101.) / 100, alpha, beta)
+                    self.ccf_1d /= sum(self.ccf_1d)
+        self.seg_tree = seg_tree
+        self.clust_ccf = clust_ccf
 
-        self.abs_copy_num = None
-        self.raw_ccf_1d = None
-        self.abs_copy_num_prob_dist = None
+        self.type = 'CNV'
+
+        self._var_str = ':'.join(map(str, (mut_category, chrN, start.band, end.band, 'a1' if a1 else 'a2')))
+
+        self.event_name = mut_category + str(chrN) + start.band + '-' + end.band[1:] if start != end else mut_category\
+                            + str(chrN) + start.band
+        self.event_name += '_' if dupe else ''
+        self.cluster_assignment = None
+        if a1:
+            self.local_cn_a1 = local_cn
+            self.local_cn_a2 = np.nan
+        else:
+            self.local_cn_a2 = local_cn
+            self.local_cn_a1 = np.nan
+        self.a1 = a1
+        self.mut_category = mut_category
+        # self.set_mut_category(mut_category, arm=arm)
+
+    def __hash__(self):
+        return hash(self._var_str)
+
+    def __str__(self):
+        return self._var_str
+
+    def __repr__(self):
+        return self.event_name
+
+    def __len__(self):
+        return self.end - self.start + 1
+
+    @property
+    def var_str(self):
+        return self._var_str
+
+    def set_mut_category(self, mut_category, arm=None, cytoband=os.path.dirname(__file__)+'/supplement_data/cytoBand.txt'):
+        self.mut_category = mut_category
+        if mut_category == 'WGD':
+            self.gene = 'WGD'
+        elif mut_category == 'Arm_loss':
+            self.gene = 'loss_' + str(self.chrN) + arm
+        elif mut_category == 'Arm_gain':
+            self.gene = 'gain_' + str(self.chrN) + arm
+        elif mut_category.startswith('Focal'):
+            bands = []
+            with open(cytoband, 'r') as f:
+                for line in f:
+                    row = line.strip('\n').split('\t')
+                    if row[0].strip('chr') != str(self.chrN):
+                        continue
+                    if int(row[1]) < self.end and int(row[2]) > self.start:
+                        bands.append(row[3])
+                    if int(row[1]) > self.end:
+                        break
+            bands = sorted(bands)
+            section = bands[0]+'-'+bands[-1] if len(bands) > 1 else bands[0]
+            if mut_category.endswith('loss'):
+                self.gene = 'loss_' + str(self.chrN) + section
+            elif mut_category.endswith('gain'):
+                self.gene = 'gain_' + str(self.chrN) + section
 
 
 class SomMutationND():
@@ -512,56 +590,6 @@ class CN_SegProfile():
         pass
 
 
-
-class CopyNumberEvent():
-    """CLASS info
-
-        FUNCTIONS:
-
-            public: None
-
-            private:
-                _auto_file_type -- autodetect input data type
-                _load_segs -- load segments and call _results function
-                _merge_segments_in_segtree -- helper function when reading in segments
-                _results_from_seg_file -- parser from seg_file
-                _results_from_RData -- parser from Absolute RData
-                _results_from_db -- parser from segments from sqlite3 db
-
-        PROPERTIES:
-
-            regular variables:
-                seg_tree -- Interval Tree per chromosome formed from input CN profile
-                merged_seg_tree -- version of seg_tree with merged adjacent segments of same allelic copy number
-
-            @property methods: none
-    """
-
-
-    def __init__(self, seg_file, input_type='auto', from_sample=None):
-        # try: # validate correct input
-        self.chroms = list(map(str, range(1, 23)))
-        self.chroms.append('X')
-        self.chroms.append('Y')
-        self.from_sample = from_sample  # from_sample can be an Object, and potential to get purity from this
-        logging.debug('reading in :' + seg_file)
-        if input_type == 'auto':
-            seg_file_type = self._auto_file_type(seg_file)
-            logging.debug('found seg file type:' + seg_file_type)
-        else:
-            seg_file_type = input_type
-        self.seg_tree = {x: IntervalTree() for x in self.chroms}
-        if seg_file_type in ['tab', 'absolute', 'sqlite']: self._load_segs(seg_file, seg_file_type)
-        logging.debug(self.seg_tree)
-        ## overwrite merged_seg_tree with normal seg tree (raw seg tree)
-        self.merged_seg_tree = self.seg_tree
-
-        '''
-        except:
-            print "BAD SEG FILE:", seg_file
-            #err = str(sys.exc_info()[1])
-            #raise Exception('\n'.join(['Incorrect input format for seg file ',err,'please review input data!']))
-        '''
 
 ##############################################################
 ##EventPair() - class to store event pairs for relative timing

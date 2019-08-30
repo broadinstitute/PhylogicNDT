@@ -1,43 +1,45 @@
 #!/usr/bin/env python
-#PhylogicNDT
-#Copyright (c) 2015-2019, Broad Institute, Inc. and The General Hospital Corporation. All rights reserved.
-#Copyright (c) 2015-2018,  Ignaty Leshchiner, Dimitri Livitz, Daniel Rosebrock, Gad Getz. All rights reserved.
-#Copyright (c) 2018-2019, Ignaty Leshchiner, Liudmila Elagina, Justin Cha, Oliver Spiro, Aina Martinez, Gad Getz. All rights reserved.
+# PhylogicNDT
+# Copyright (c) 2015-2019, Broad Institute, Inc. and The General Hospital Corporation. All rights reserved.
+# Copyright (c) 2015-2018,  Ignaty Leshchiner, Dimitri Livitz, Daniel Rosebrock, Gad Getz. All rights reserved.
+# Copyright (c) 2018-2019, Ignaty Leshchiner, Liudmila Elagina, Justin Cha, Oliver Spiro, Aina Martinez, Gad Getz. All rights reserved.
 
 import argparse
+import logging
 import os
 import sys
-sys.path.append(os.path.dirname(os.path.realpath(__file__))+"/")
-import logging
+
+sys.path.append(os.path.dirname(os.path.realpath(__file__)) + "/")
+
+
 logging.getLogger().setLevel(logging.INFO)
 
-
-import Cluster.Cluster  #Cluster Tool
+import Cluster.Cluster  # Cluster Tool
 import PhylogicSim.Simulations
-import BuildTree.BuildTree # Tree Building Tool
+import BuildTree.BuildTree  # Tree Building Tool
 
 
 def build_parser():
     parser = argparse.ArgumentParser(description="Run PhylogicNDT")
 
-    #global parameters common to most tools
-    base_parser=argparse.ArgumentParser(add_help=False)
+    # global parameters common to most tools
+    base_parser = argparse.ArgumentParser(add_help=False)
 
     # option for specifying individual/patient ID
-    base_parser.add_argument('--indiv_id','-i',
-                        type=str,
-                        action='store',
-                        dest='indiv_id',
-                        default='Indiv1',
-                        help='Patient/Case ID')
+    base_parser.add_argument('--indiv_id', '-i',
+                             type=str,
+                             action='store',
+                             dest='indiv_id',
+                             default='Indiv1',
+                             help='Patient/Case ID')
 
-    #Samples information
+    # Samples information
     # Specifying samples on cmdline one-by-one in format sample_id:maf_fn:seg_fn:purity:timepoint
     base_parser.add_argument("-s", "--sample", dest='sample_data', action='append', type=str,
                              help="Sample data, format sample_id:maf_fn:seg_fn:purity:timepoint; each sample specify separately by multiple -s ..; ")
 
     # Alternative: Instead of specifying samples on cmdline, a tsv - sif (sample information file) may be used.
-    base_parser.add_argument("-sif", "--sample_information_file",dest='sif',type=str,help="""Sample information tsv file with sample_ids and CCF and copy-number file_paths; \n 
+    base_parser.add_argument("-sif", "--sample_information_file", dest='sif', type=str, help="""Sample information tsv file with sample_ids and CCF and copy-number file_paths; \n 
     format per row (with header) sample_id\tmaf_fn\tseg_fn\tpurity\ttimepoint""")
 
     # Filtering of Mutations/Events
@@ -61,7 +63,8 @@ def build_parser():
                              type=str,
                              action='store',
                              dest='driver_genes_file',
-                             default=os.path.join(os.path.dirname(__file__), 'data/supplement_data/Driver_genes_v1.0.txt'),
+                             default=os.path.join(os.path.dirname(__file__),
+                                                  'data/supplement_data/Driver_genes_v1.0.txt'),
                              help='driver list file')
 
     base_parser.add_argument("-tr", '--treatment_data',
@@ -71,125 +74,127 @@ def build_parser():
                              default=None,
                              help='path to treatment data file')
 
-    #different Tools of the PhylogicNDT Package
+    base_parser.add_argument('-ts', '--tumor_size',
+                             action='store',
+                             dest='tumor_size',
+                             default=None)
+
+    # different Tools of the PhylogicNDT Package
     subparsers = parser.add_subparsers(title="tool", description="Choose a tool to run", help='Try the Cluster tool')
 
     # Cluster - multidimensional clustering of mutations in CCF space
-    clustering = subparsers.add_parser("Cluster",help="Cluster Mutation's CCFs (from one or multiple samples) to define clonal expansions", parents=[base_parser])
+    clustering = subparsers.add_parser("Cluster",
+                                       help="Cluster Mutation's CCFs (from one or multiple samples) to define clonal expansions",
+                                       parents=[base_parser])
 
     # run Cluster and BuildTree  together
-    clustering.add_argument('--run_with_BuildTree','-rb',
-                        action="store_true",
-                        dest='buildtree',
-                        help='Run the BuildTree Module right after clustering and generate joint report')
-
+    clustering.add_argument('--run_with_BuildTree', '-rb',
+                            action="store_true",
+                            dest='buildtree',
+                            help='Run the BuildTree Module right after clustering and generate joint report')
 
     # option for specifying PoN - will be used to append to blacklist.
     clustering.add_argument('--PoN',
-                        type=str,
-                        action='store',
-                        dest='PoN',
-                        default="false",
-                        help='PoN to use, specify false to skip.')
+                            type=str,
+                            action='store',
+                            dest='PoN',
+                            default="false",
+                            help='PoN to use, specify false to skip.')
 
-    #Overwrite Blacklist
+    # Overwrite Blacklist
     clustering.add_argument('--Delete_Blacklist',
-                        action="store_true",
-                        dest='Delete_Blacklist',
-                        help='Generate new blacklist from PoN')
+                            action="store_true",
+                            dest='Delete_Blacklist',
+                            help='Generate new blacklist from PoN')
 
     ##Clustering Parameters
 
-    #num ccf bins
-    clustering.add_argument('--grid_size','-g',
-                        type=int,
-                        action='store',
-                        dest='grid_size',
-                        default=101,
-                        help='num ccf bins, must match for txt input, otherwise may be any number that grid in absolute RData is divisble by.')
+    # num ccf bins
+    clustering.add_argument('--grid_size', '-g',
+                            type=int,
+                            action='store',
+                            dest='grid_size',
+                            default=101,
+                            help='num ccf bins, must match for txt input, otherwise may be any number that grid in absolute RData is divisble by.')
 
-    #num iterations
-    clustering.add_argument('--n_iter','-ni',
-                        type=int,
-                        action='store',
-                        dest='iter',
-                        default=250,
-                        help='number iterations')
+    # num iterations
+    clustering.add_argument('--n_iter', '-ni',
+                            type=int,
+                            action='store',
+                            dest='iter',
+                            default=250,
+                            help='number iterations')
 
-    #Cluster with Indels?
+    # Cluster with Indels?
     clustering.add_argument('--use_indels',
-                        action="store_true",
-                        dest='use_indels',
-                        help='Use indels in clustering. By default indels are added in after clustering.')
-    #Impute missing?
+                            action="store_true",
+                            dest='use_indels',
+                            help='Use indels in clustering. By default indels are added in after clustering.')
+    # Impute missing?
     clustering.add_argument('--impute',
-                        action="store_true",
-                        dest='impute_missing',
-                        help='Assume 0 ccf for missing mutations.')
+                            action="store_true",
+                            dest='impute_missing',
+                            help='Assume 0 ccf for missing mutations.')
 
-    #Don't use poorly clustered mutations.
-    clustering.add_argument('--min_coverage','-mc',
-                        type=int,
-                        action='store',
-                        dest='min_cov',
-                        default=8,
-                        help='Mutations with coverage lower than this will not be used to cluster and instead re-assigned after dp clustering')
+    # Don't use poorly clustered mutations.
+    clustering.add_argument('--min_coverage', '-mc',
+                            type=int,
+                            action='store',
+                            dest='min_cov',
+                            default=8,
+                            help='Mutations with coverage lower than this will not be used to cluster and instead re-assigned after dp clustering')
 
-    clustering.add_argument('--cancer_type','-ct',
-                        type=str,
-                        action='store',
-                        dest='cancer_type',
-                        default='All_cancer',
-                        help='cancer type -- useful for calling focal events') 
+    clustering.add_argument('--cancer_type', '-ct',
+                            type=str,
+                            action='store',
+                            dest='cancer_type',
+                            default='All_cancer',
+                            help='cancer type -- useful for calling focal events')
 
     clustering.add_argument('--cn_peaks',
-                        type=str,
-                        action='store',
-                        dest='gistic_fn',
-                        default=None,
-                        help='interval file with focal amp and del regions specified')
+                            type=str,
+                            action='store',
+                            dest='gistic_fn',
+                            default=None,
+                            help='interval file with focal amp and del regions specified')
 
     clustering.add_argument('--Pi_k_r',
-                        type=int,
-                        action='store',
-                        dest='Pi_k_r',
-                        default=3,
-                        help='parameter r of the negative binomial prior over number of clusters')
+                            type=int,
+                            action='store',
+                            dest='Pi_k_r',
+                            default=3,
+                            help='parameter r of the negative binomial prior over number of clusters')
 
     clustering.add_argument('--Pi_k_mu',
-                        type=int,
-                        action='store',
-                        dest='Pi_k_mu',
-                        default=3,
-                        help='parameter mu of the negative binomial prior over number of clusters')
+                            type=int,
+                            action='store',
+                            dest='Pi_k_mu',
+                            default=3,
+                            help='parameter mu of the negative binomial prior over number of clusters')
 
     clustering.add_argument('--order_by_timepoint',
-                        action='store_true',
-                        dest='order_by_timepoint',
-                        help='Order samples by timepoint values as specified in .sif or cmdline')
+                            action='store_true',
+                            dest='order_by_timepoint',
+                            help='Order samples by timepoint values as specified in .sif or cmdline')
 
-     # output type
+    # output type
     clustering.add_argument('--maf',
-                        action="store_true",
-                        dest='maf',
-                        help='output maf if set')
+                            action="store_true",
+                            dest='maf',
+                            help='output maf if set')
 
     clustering.add_argument('--no_html',
-                        action="store_false",
-                        dest='html',
-                        help='output html if set')
+                            action="store_false",
+                            dest='html',
+                            help='output html if set')
     clustering.add_argument('--time_points',
-                        action='store',
-                        dest='time_points',
-                        default=None)
-    clustering.add_argument('--tumor_size',
-                        action='store',
-                        dest='tumor_size',
-                        default=None)
+                            action='store',
+                            dest='time_points',
+                            default=None)
     clustering.add_argument('--scale',
-                        action='store_true',
-                        dest='scale',
-                        default=False)
+                            action='store_true',
+                            dest='scale',
+                            default=False)
 
     clustering.set_defaults(func=Cluster.Cluster.run_tool)
 
@@ -201,11 +206,10 @@ def build_parser():
                             default=0,
                             help='num samples to match, 0 for all samples')
 
-
-
     # BuildTree  Tool
 
-    buildtree = subparsers.add_parser("BuildTree", help="BuildTree module for constructing of phylogenetic trees.", parents=[base_parser])
+    buildtree = subparsers.add_parser("BuildTree", help="BuildTree module for constructing of phylogenetic trees.",
+                                      parents=[base_parser])
     buildtree.add_argument('--cluster_ccf', '-c',
                            type=str,
                            action='store',
@@ -224,34 +228,35 @@ def build_parser():
                            help='number iterations')
     buildtree.set_defaults(func=BuildTree.BuildTree.run_tool)
 
-
     # GrowthKinetics  Tool
 
-    growthkinetics=subparsers.add_parser("GrowthKinetics",help="Sample growth rates and fitness across ensemble of trees")
+    growthkinetics = subparsers.add_parser("GrowthKinetics",
+                                           help="Sample growth rates and fitness across ensemble of trees")
     growthkinetics.add_argument('--cluster_ccf', '-c',
-                           type=str,
-                           action='store',
-                           dest='cluster_ccf',
-                           help='tsv file phylogic clustering results')
+                                type=str,
+                                action='store',
+                                dest='cluster_ccf',
+                                help='tsv file phylogic clustering results')
     growthkinetics.add_argument('--mutation_ccf', '-m',
-                           type=str,
-                           action='store',
-                           dest='mutation_ccf',
-                           help='tsv file generated by clustering')
+                                type=str,
+                                action='store',
+                                dest='mutation_ccf',
+                                help='tsv file generated by clustering')
     growthkinetics.add_argument('--n_iter', '-ni',
-                           type=int,
-                           action='store',
-                           dest='n_iter',
-                           default=250,
-                           help='number iterations')
-    growthkinetics.add_argument('--wbc','-w', type=int, nargs='+',default=[], action='store', dest='wbc', help='wbc')
-    growthkinetics.add_argument('--time','-t', type=int, nargs='+',default=[], action='store', dest='time', help='time')
+                                type=int,
+                                action='store',
+                                dest='n_iter',
+                                default=250,
+                                help='number iterations')
+    growthkinetics.add_argument('--wbc', '-w', type=int, nargs='+', default=[], action='store', dest='wbc', help='wbc')
+    growthkinetics.add_argument('--time', '-t', type=int, nargs='+', default=[], action='store', dest='time',
+                                help='time')
 
-    #growthkinetics.set_defaults(func=GrowthKinetics)
+    # growthkinetics.set_defaults(func=GrowthKinetics)
 
-
-	#PhylogicSim simulator
-    simulations=subparsers.add_parser("PhylogicSim",help="Generate simulations drawn from a truth clustering.", parents=[base_parser])
+    # PhylogicSim simulator
+    simulations = subparsers.add_parser("PhylogicSim", help="Generate simulations drawn from a truth clustering.",
+                                        parents=[base_parser])
     simulations.add_argument('-p',
                              type=float,
                              action='store',
@@ -326,11 +331,12 @@ def build_parser():
                              help='TSV File of purity values for each sample, and optionally a 2/3/4 column with a, b and n values. Number of samples needs to match ns.')
     simulations.set_defaults(func=PhylogicSim.Simulations.run_tool)
 
-    #print help without -h
-    if len(sys.argv) <2: parser.print_help(sys.stderr)
+    # print help without -h
+    if len(sys.argv) < 2: parser.print_help(sys.stderr)
     return parser.parse_args()
 
-#if __name__ == "main":
-parser=build_parser()
+
+# if __name__ == "main":
+parser = build_parser()
 args = parser
 args.func(args)

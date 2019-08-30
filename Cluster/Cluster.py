@@ -70,6 +70,7 @@ def run_tool(args):
                 if len(patient_data.sample_list) == args.n_samples: #use only first N samples
                     break
 
+        patient_data.intersect_cn_trees()
         patient_data.preprocess_samples()
 
         #TODO: how 1D (one sample) is handeled
@@ -79,6 +80,7 @@ def run_tool(args):
                                                           mode="maxpear")
 
         patient_data.ClusteringResults = DP_Cluster.results
+        patient_data.cluster_temp_removed()
         #sample_id = args.indiv_id
 
         #Output and visualization
@@ -87,9 +89,13 @@ def run_tool(args):
         cluster_ccfs = {i+1:ccf_hists for i,ccf_hists in enumerate(patient_data.ClusteringResults.clust_CCF_dens)}
         phylogicoutput.write_patient_cluster_ccfs(patient_data, cluster_ccfs)
         phylogicoutput.write_patient_mut_ccfs(patient_data, cluster_ccfs)
+        phylogicoutput.write_patient_cnvs(patient_data, cluster_ccfs)
+        phylogicoutput.plot_1d_clusters('{}.cluster_ccfs.txt'.format(patient_data.indiv_name))
+        phylogicoutput.plot_1d_mutations('{}.mut_ccfs.txt'.format(patient_data.indiv_name))
 
         if not args.buildtree:  #run only Clustering tool
-            phylogicoutput.generate_html_from_clustering_results(patient_data.ClusteringResults, patient_data, drivers=patient_data.driver_genes)
+            phylogicoutput.generate_html_from_clustering_results(patient_data.ClusteringResults, patient_data,
+                drivers=patient_data.driver_genes, treatment_file=args.treatment_data)
 
         else: #run build tree next
             import BuildTree.BuildTree
