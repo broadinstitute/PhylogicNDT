@@ -23,12 +23,12 @@ def run_tool(args):
             PoN = args.PoN
 
         #init a Patient
-        patient_data = Patient.Patient(artifact_blacklist=args.artifact_blacklist, delete_auto_bl=args.Delete_Blacklist,
-                            PoN_file=PoN, indiv_name=args.indiv_id, artifact_whitelist=args.artifact_whitelist,
-                            min_coverage=args.min_cov, use_indels=args.use_indels, impute_missing=args.impute_missing,
-                            driver_genes_file = args.driver_genes_file)
+        patient_data = Patient.Patient(artifact_blacklist=args.artifact_blacklist,
+                                       PoN_file=PoN, indiv_name=args.indiv_id, artifact_whitelist=args.artifact_whitelist,
+                                       min_coverage=args.min_cov, use_indels=args.use_indels, impute_missing=args.impute_missing,
+                                       driver_genes_file = args.driver_genes_file)
 
-
+        # delete_auto_bl=args.Delete_Blacklist,
         #Load sample data
 
         if args.sif:  # if sif file is specified
@@ -48,6 +48,7 @@ def run_tool(args):
                 print timepoint
                 patient_data.addSample(maf_fn, sample_id, timepoint_value=timepoint,  grid_size=args.grid_size, _additional_muts=None, seg_file=seg_fn,
                                 purity=purity)
+
                 if len(patient_data.sample_list) == args.n_samples: #use only first N samples
                     break
 

@@ -7,10 +7,11 @@ from intervaltree import IntervalTree
 import numpy as np
 import scipy.stats
 
+
 ##########################################################
-##Patient's SomaticEvent() - class to store "virtual" mutation on Patient level
+# Patient's SomaticEvent - class to store "virtual" mutation on Patient level
 ##########################################################
-class SomMutation():
+class SomMutation:
     """CLASS info
 
         FUNCTIONS:
@@ -32,6 +33,7 @@ class SomMutation():
                  on_arm_event=None,
                  seg_tree=None,
                  clust_ccf=None,
+                 cluster_assignment=None,
                  multiplicity=np.nan,
                  local_cn_a1=np.nan,
                  local_cn_a2=np.nan,
@@ -47,24 +49,23 @@ class SomMutation():
         self.pos = int(float(pos))
         self.ref = ref
         self.alt = alt
-        self.ref_cnt = int(float(ref_cnt)) if ref_cnt is not None else None  # TODO: add support/handling for text CCF files
+        self.ref_cnt = int(
+            float(ref_cnt)) if ref_cnt is not None else None  # TODO: add support/handling for text CCF files
         self.alt_cnt = int(float(alt_cnt)) if alt_cnt is not None else None
         self.gene = gene if gene is not None and 'unknown' not in gene.lower() else None
 
-        self.blacklist_status = False #is blacklisted mutation
-        self.graylist_status = False #is blacklisted mutation
+        self.blacklist_status = False  # is blacklisted mutation
+        self.graylist_status = False  # is blacklisted mutation
 
-        #raw ccf before clustering
-        self.ccf_1d=ccf_1d
+        # raw ccf before clustering
+        self.ccf_1d = ccf_1d
 
+        self.status = Enums.MutStatus.OK  # later if blacklisted or graylisted
 
-        self.status=Enums.MutStatus.OK #later if blacklisted or graylisted
-
-        self.clean_local_cn(local_cn_a1,local_cn_a2)
-
+        self.clean_local_cn(local_cn_a1, local_cn_a2)
 
         if type_ is None:
-            # guess type for backwards compatability, but prefer that type be passed explicitly.
+            # guess type for backwards compatibility, but prefer that type be passed explicitly.
             if "-" in self.ref:
                 self.type = Enums.MutType.INS
             elif "-" in self.alt:
@@ -75,19 +76,19 @@ class SomMutation():
             self.type = type_
 
         self._var_str = ":".join(map(str, [self.chrN, self.pos, self.ref,
-                                               self.alt]))  # variant string, set as private, gotten with self.var_str
+                                           self.alt]))  # variant string, set as private, gotten with self.var_str
 
-        #try:
+        # try:
         #    self.ccf_1d = tuple(map(float, ccf_1d))  # make sure all ccf values are floats
         #    # TODO: CCF broadening - this needs to be implemented. Currently does nothing.
         #    if max(self.ccf_1d) > 0.25:  # hueristic - if 25% of the weight is in one bin, broaden it.
         #        self.ccf_1d = self._broaden_ccf(self.ccf_1d)
-        #except:
+        # except:
         #    logging.debug("Cannot parse ccf_1d in SomMutation instantiation")
         #    self.ccf_1d = None
 
-        #self.blacklist_status = False
-        #self.graylist_status = False
+        # self.blacklist_status = False
+        # self.graylist_status = False
 
         """
         TODO:auto set blacklist/graylist status.
@@ -103,14 +104,14 @@ class SomMutation():
         self.mut_category = mut_category
         self.color = None
 
-        #move to output
-        # This check is to avoid crashes when det_power is "NA" or a non valid str that still evalutes to true.
+        # move to output
+        # This check is to avoid crashes when det_power is "NA" or a non valid str that still evaluates to true.
         self.det_power = float(det_power) if det_power and det_power not in self.from_sample.na_values else None
-        self.power_color = 'white' if not self.det_power else 'rgb({0},{0},{0})'.format(int(255 * self.det_power))  # takes floor of the value
-
+        self.power_color = 'white' if not self.det_power else 'rgb({0},{0},{0})'.format(
+            int(255 * self.det_power))  # takes floor of the value
 
         ## TODO: remove this if chain
-        #if mut_category:
+        # if mut_category:
         #    if 'Missense_Mutation' in mut_category:
         #        self.color = 'blue'
         #    elif 'Silent' in mut_category:
@@ -122,16 +123,16 @@ class SomMutation():
         ##
 
         # Output of CCF clustering
-        #self.cluster_assignment = None #moved to ND VirtualEvent
-        #self.post_CCF_1d = None
+        self.cluster_assignment = cluster_assignment  # moved to ND VirtualEvent
+        # self.post_CCF_1d = None
 
-        #if local_cn_a1 is not None:
+        # if local_cn_a1 is not None:
         #    self.local_cn_a1 = float(local_cn_a1)
-        #else:
+        # else:
         #    self.local_cn_a1 = np.nan
-        #if local_cn_a2 is not None:
+        # if local_cn_a2 is not None:
         #    self.local_cn_a2 = float(local_cn_a2)
-        #else:
+        # else:
         #    self.local_cn_a2 = np.nan
 
     # except:
@@ -214,9 +215,8 @@ class SomMutation():
         raise NotImplementedError
 
 
-
 ##########################################################
-##CopyNumberEvent() - class to store each CN event
+# CopyNumberEvent() - class to store each CN event
 ##########################################################
 class CopyNumberEvent():
     """CLASS info
@@ -257,7 +257,7 @@ class CopyNumberEvent():
             std = std if std is not None else (ccf_high - ccf_low) / 4.
             if ccf_hat <= std:
                 self.ccf_1d = np.insert(np.zeros(100), 0, 1.)
-            elif ccf_hat >= 1.-std:
+            elif ccf_hat >= 1. - std:
                 self.ccf_1d = np.append(np.zeros(100), 1.)
             else:
                 alpha = ccf_hat * ccf_hat * ((1 - ccf_hat) / (std * std) - (1 / ccf_hat))
@@ -276,8 +276,9 @@ class CopyNumberEvent():
 
         self._var_str = ':'.join(map(str, (mut_category, chrN, start.band, end.band, 'a1' if a1 else 'a2')))
 
-        self.event_name = mut_category + str(chrN) + start.band + '-' + end.band[1:] if start != end else mut_category\
-                            + str(chrN) + start.band
+        self.event_name = mut_category + str(chrN) + start.band + '-' + end.band[1:] if start != end else mut_category \
+                                                                                                          + str(
+            chrN) + start.band
         self.event_name += '_' if dupe else ''
         self.cluster_assignment = None
         if a1:
@@ -306,7 +307,8 @@ class CopyNumberEvent():
     def var_str(self):
         return self._var_str
 
-    def set_mut_category(self, mut_category, arm=None, cytoband=os.path.dirname(__file__)+'/supplement_data/cytoBand.txt'):
+    def set_mut_category(self, mut_category, arm=None,
+                         cytoband=os.path.dirname(__file__) + '/supplement_data/cytoBand.txt'):
         self.mut_category = mut_category
         if mut_category == 'WGD':
             self.gene = 'WGD'
@@ -326,14 +328,14 @@ class CopyNumberEvent():
                     if int(row[1]) > self.end:
                         break
             bands = sorted(bands)
-            section = bands[0]+'-'+bands[-1] if len(bands) > 1 else bands[0]
+            section = bands[0] + '-' + bands[-1] if len(bands) > 1 else bands[0]
             if mut_category.endswith('loss'):
                 self.gene = 'loss_' + str(self.chrN) + section
             elif mut_category.endswith('gain'):
                 self.gene = 'gain_' + str(self.chrN) + section
 
 
-class SomMutationND():
+class SomMutationND:
     """CLASS info
 
         FUNCTIONS:
@@ -364,12 +366,13 @@ class SomMutationND():
         self.pos = int(float(pos))
         self.ref = ref
         self.alt = alt
-        self.ref_cnt = int(float(ref_cnt)) if ref_cnt is not None else None  # TODO: add support/handling for text CCF files
+        self.ref_cnt = int(
+            float(ref_cnt)) if ref_cnt is not None else None  # TODO: add support/handling for text CCF files
         self.alt_cnt = int(float(alt_cnt)) if alt_cnt is not None else None
         self.gene = gene if gene is not None and 'unknown' not in gene.lower() else None
 
         if type_ is None:
-            # guess type for backwards compatability, but prefer that type be passed explicitly.
+            # guess type for backwards compatibility, but prefer that type be passed explicitly.
             if "-" in self.ref:
                 self.type = Enums.MutType.INS
             elif "-" in self.alt:
@@ -378,14 +381,13 @@ class SomMutationND():
                 self.type = Enums.MutType.SNV
         else:
             self.type = type_
-
-        self._var_str = ":".join(map(str, [self.chrN, self.pos, self.ref,
-                                               self.alt]))  # variant string, set as private, gotten with self.var_str
+        # variant string, set as private, gotten with self.var_str
+        self._var_str = ":".join(map(str, [self.chrN, self.pos, self.ref, self.alt]))
 
         try:
             self.ccf_1d = tuple(map(float, ccf_1d))  # make sure all ccf values are floats
             # TODO: CCF broadening - this needs to be implemented. Currently does nothing.
-            if max(self.ccf_1d) > 0.25:  # hueristic - if 25% of the weight is in one bin, broaden it.
+            if max(self.ccf_1d) > 0.25:  # heuristic - if 25% of the weight is in one bin, broaden it.
                 self.ccf_1d = self._broaden_ccf(self.ccf_1d)
         except:
             logging.debug("Cannot parse ccf_1d in SomMutation instantiation")
@@ -405,9 +407,9 @@ class SomMutationND():
 
 
 ##############################################################
-##CN_SegProfile() - class to store copy number profile
+# CN_SegProfile() - class to store copy number profile
 ##############################################################
-class CN_SegProfile():
+class CN_SegProfile:
     """CLASS info
 
         FUNCTIONS:
@@ -590,9 +592,8 @@ class CN_SegProfile():
         pass
 
 
-
 ##############################################################
-##EventPair() - class to store event pairs for relative timing
+# EventPair() - class to store event pairs for relative timing
 ##############################################################
 ########### Needed for backwards compatability ###############
 class Event_Pair():

@@ -1,20 +1,10 @@
 import logging
 import numpy as np
 import itertools
-import pkgutil
 import functools
-
+from scipy.special import logsumexp as logsumexp_scipy
 from .Node import Node
-# Logsumexp options
-from scipy.special import logsumexp as logsumexp_scipy  # always import as double safe method (slow)
 
-if pkgutil.find_loader('sselogsumexp') is not None:
-    logging.info("Using fast logsumexp")
-    from sselogsumexp import logsumexp
-
-else:
-    logging.info("Using scipy (slower) logsumexp")
-    from scipy.special import logsumexp
 
 CLONAL_CLUSTER = 1
 
@@ -28,6 +18,20 @@ class Tree:
         self._edges = edges if edges else []
         # pointer to the root of the tree
         self._root = root
+
+    def init_tree_from_clustering(self, clustering_results):
+        """ Initialize Tree object with clustering results """
+        for cluster_id, cluster in clustering_results.items():
+            if not cluster.blacklisted:
+                self.add_node(cluster.identifier, data=cluster)
+        # TODO find clonal cluster and set it as a root
+        root = self.nodes[CLONAL_CLUSTER]
+        self.set_root(root)
+        # add edges (initially all edges are children of Clonal cluster)
+        for identifier, node in self.nodes.items():
+            if identifier != CLONAL_CLUSTER:
+                self.add_edge(root, node)
+        logging.debug('Tree initialized with edges {}'.format(self.edges))
 
     def __repr__(self):
         '''
@@ -175,27 +179,30 @@ class Tree:
             siblings = node.siblings
             if parent and len(siblings) == 0:
                 def __get_tp_p_parent(tp):
-                    node_tp_density = node.data[tp]
+                    cluster_tp_density = node.data.hist[tp]
                     # do not penalize == parent so pad by 10
-                    node_parent_diff = self.normalize_in_logspace(self.diff_ccf(parent.data[tp], node_tp_density),
-                                                                  in_log_space=False)
+                    cluster_parent_density = parent.data.hist[tp]
+                    node_parent_diff = self.normalize_in_logspace(
+                        self.diff_ccf(cluster_parent_density, cluster_tp_density), in_log_space=False)
                     # TODO positive log likelihood
                     if np.log(sum(node_parent_diff[101 - 5:]) + 1e-20) > 0.:
                         return 0.0
                     else:
                         return np.log(sum(node_parent_diff[101 - 5:]) + 1e-20)
 
-                p_parent = np.sum([__get_tp_p_parent(tp) for tp in time_points])
+                p_parent = np.sum([__get_tp_p_parent(tp) for tp in range(len(time_points))])
             else:
                 p_parent = 0.
 
             if len(siblings) > 0:
                 def __get_tp_p_sib(tp):
-                    convolved_distrib = functools.reduce(np.convolve,
-                                                         [self._nodes[sibling].data[tp] for sibling in siblings])
+                    siblings_densities = []
+                    for sibling in siblings:
+                        siblings_densities.append(self._nodes[sibling].data.hist[tp])
+                    convolved_distrib = functools.reduce(np.convolve, siblings_densities)
                     normed_conv_dist = self.normalize_in_logspace(convolved_distrib, in_log_space=False)
                     if parent:
-                        parent_dist = self.normalize_in_logspace(parent.data[tp], in_log_space=False)
+                        parent_dist = self.normalize_in_logspace(parent.data.hist[tp], in_log_space=False)
                         parent_dist.resize(np.shape(normed_conv_dist))  # fill with zeros
                         diff_parent_sibling_dist = self.normalize_in_logspace(
                             self.diff_ccf(parent_dist, normed_conv_dist), in_log_space=False)
@@ -206,7 +213,7 @@ class Tree:
                         # don't penalize == sib, 5 bins
                         return np.log(sum(normed_conv_dist[:101 + 5]) + 1e-20)
 
-                p_sib = np.sum([__get_tp_p_sib(tp) for tp in time_points])
+                p_sib = np.sum([__get_tp_p_sib(tp) for tp in range(len(time_points))])
             else:
                 p_sib = 0.
             node_llhood.append([p_parent, p_sib])
@@ -262,13 +269,12 @@ class Tree:
 
     @staticmethod
     def normalize_in_logspace(dist, in_log_space=True):
-        if not in_log_space:
-            log_dist = np.log(dist, dtype=np.float64)
-            return np.exp(log_dist - logsumexp_scipy(log_dist))
-        else:
-            logging.debug('Likelihood before normalization\n{}'.format(dist))
+        # logging.debug('Likelihood before normalization\n{}'.format(dist))
+        if in_log_space:
             log_dist = np.array(dist, dtype=np.float64)
-            return np.exp(log_dist - logsumexp_scipy(log_dist))
+        else:
+            log_dist = np.log(dist, dtype=np.float64)
+        return np.exp(log_dist - logsumexp_scipy(log_dist))
 
     """
     @staticmethod
@@ -341,7 +347,7 @@ class Tree:
             node.remove_all_children()
         for node_id, node in self._nodes.items():
             node.remove_parent()
-        # Create new edges
+        # Add new edges
         for (parent_id, child_id) in new_edges:
             self.add_edge(self._nodes[parent_id], self._nodes[child_id])
 
