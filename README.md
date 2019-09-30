@@ -21,6 +21,7 @@ Install numpy, scipy, matplotlib, and pandas (these versions are recommended)
 
 	pip numpy==1.13.3 pandas==0.19.2 scipy==1.0.0 matplotlib==2.0.0
 	pip install -e git+https://github.com/rmcgibbo/logsumexp.git#egg=sselogsumexp (for faster compute)
+	pip install -e git+https://github.com/garydoranjr/pyemd.git#egg=pyemd
 
 
 Install remaining packages 

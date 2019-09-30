@@ -8,6 +8,7 @@ RUN apt-get -y update
 RUN apt-get install -y libgraphviz-dev
 RUN pip install -r /tmp/req
 RUN pip install -e git+https://github.com/rmcgibbo/logsumexp.git#egg=sselogsumexp
+RUN pip install -e git+https://github.com/garydoranjr/pyemd.git#egg=pyemd
 RUN mkdir /phylogicndt/
 COPY PhylogicSim /phylogicndt/PhylogicSim
 COPY GrowthKinetics /phylogicndt/GrowthKinetics
