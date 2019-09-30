@@ -2,9 +2,9 @@ import numpy as np
 import logging
 import operator
 import collections
-from .Tree import Tree
 
-CLONAL_CLUSTER = 1
+from .Tree import Tree
+import ShuffleMutations
 
 
 class BuildTreeEngine:
@@ -37,32 +37,15 @@ class BuildTreeEngine:
         counts = collections.Counter(map(tuple, sorted_edges))
         return sorted(counts.items(), key=operator.itemgetter(1), reverse=True)
 
-    def _initialize_tree(self, edges=None, nodes=None):
-        # Create Tree object
-        tree = Tree()
-        # add nodes to the tree
-        if nodes:
-            tree.add_nodes(nodes)
-        else:
-            for cluster_id, cluster in self._clustering_results.clusters.items():
-                tree.add_node(cluster.identifier, data=cluster.densities)
-            # TODO find clonal cluster and set it as a root
-            root = tree.nodes[CLONAL_CLUSTER]
-            tree.set_root(root)
-        if edges:
-            tree.add_edges(edges)
-        else:
-            # add edges (initially all edges are children of Clonal cluster)
-            for identifier, node in tree.nodes.items():
-                if identifier != CLONAL_CLUSTER:
-                    tree.add_edge(root, node)
-        logging.debug('Tree initialized with edges {}'.format(tree.edges))
-        return tree
-
     def build_tree(self, n_iter=250, burn_in=100):
         """ Main function to construct phylogenetic tree """
-        tree = self._initialize_tree()
-        time_points = self._clustering_results.samples
+        tree = Tree()
+        tree.init_tree_from_clustering(self._patient.ClusteringResults)
+        # Create initial tree, where every cluster is child of clonal
+
+        # ND Histogram for shuffling mutations
+        nd_hist = self._patient.make_ND_histogram()
+        time_points = self._patient.sample_list
         for n in range(n_iter + burn_in):
             # check that it is not None
             if n <= burn_in:
@@ -81,23 +64,21 @@ class BuildTreeEngine:
                 self._mcmc_trace.append(tree_edges_selected)
                 self._ll_trail.append(tree_choice_lik[tree_idx])
             logging.debug('Tree to choose edges \n{}'.format(tree_edges_selected))
-            # TODO Reshuffle mutations
             # Initialize Tree of choice for the next iteration
             # update Nodes pointers to parents and children
             tree.set_new_edges(tree_edges_selected)
-        self._set_top_tree()
+            # Shuffle mutations
+            ShuffleMutations.shuffling(self._patient.ClusteringResults, self._patient.sample_list)
+            # Identify cluster label switching after mutation shuffling
+            ShuffleMutations.fix_cluster_lables(self._patient.ClusteringResults)
+        self._set_top_tree(tree)
 
-    def _set_top_tree(self):
-        top_tree_edges = self.mcmc_trace[0][0]
-        most_likely_tree_edges = self._mcmc_trace[np.argmax(self._ll_trail)]
-        most_likely_tree_edges.sort()
-        logging.debug('Most likely tree edges \n{}'.format(str(most_likely_tree_edges)))
+    def _set_top_tree(self, tree):
+        """ Pick the most often occurring tree """
         top_tree_edges = list(self.mcmc_trace[0][0])
         top_tree_edges.sort()
-        edges_equality = (most_likely_tree_edges == top_tree_edges)
-        logging.debug('The most likely tree edges \n{}'.format(str(most_likely_tree_edges)))
-        logging.debug('The most likely tree and the most common trees are the same {}'.format(str(edges_equality)))
-        self._top_tree = self._initialize_tree(top_tree_edges)
+        tree.set_new_edges(top_tree_edges)
+        self._top_tree = tree
 
     @property
     def top_tree(self):
@@ -108,3 +89,8 @@ class BuildTreeEngine:
         for node_id in self._top_tree.nodes:
             cells_ancestry[node_id] = self._top_tree.get_ancestry(node_id)
         return cells_ancestry
+
+
+
+
+

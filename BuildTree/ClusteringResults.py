@@ -10,6 +10,8 @@ from .ClusterObject import Cluster
 class ClusteringResults:
 
     def __init__(self, mut_info_file, cluster_info_file):
+        # TODO: get list of samples, for each sample add mutations to it,
+        # TODO: No purity added as an output of clustering
         self._cluster_mutations = {}
         self._samples_mutations = {}
         self._clusters = {}

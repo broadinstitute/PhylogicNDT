@@ -64,6 +64,9 @@ class PhylogicOutput(object):
                     cluster_dict[c]['muts'][mut_name]['ccf_hat'].append(ccf_hat)
                     cluster_dict[c]['muts'][mut_name]['alt_cnt'].append(alt_cnt)
                     cluster_dict[c]['muts'][mut_name]['ref_cnt'].append(ref_cnt)
+                    if mut.type != 'CNV':
+                        cluster_dict[c]['muts'][mut_name]['chrom'] = mut.chrN
+                        cluster_dict[c]['muts'][mut_name]['pos'] = mut.pos
                     if len(sample_names) == 1:
                         cluster_dict[c]['muts'][mut_name]['ccf_dist'] = list(map(float, mut.ccf_1d))
                     if i == 0:
@@ -103,6 +106,20 @@ class PhylogicOutput(object):
 
     def generate_html_from_tree(self, mutation_ccf_file, cluster_ccf_file, tree, abundances, sif=None, drivers=(),
                                 treatment_file=None, tumor_sizes_file=None, cnv_file=None):
+        """
+        Creates html report from Clustering and BuildTree output files
+        Args:
+            mutation_ccf_file: path to mut_ccfs file
+            cluster_ccf_file: path to cluster_ccfs file
+            tree: path to tree_tsv file
+            abundances: path to constrained_ccfs file
+            sif: path to sample information file
+            drivers: list of drivers
+            treatment_file: path to treatment file
+            tumor_sizes_file: path to tumor sizes file
+            cnv_file: path to cnvs file
+
+        """
         sample_names = []
         treatment_data = None
         if sif:
@@ -196,6 +213,8 @@ class PhylogicOutput(object):
                 cluster_dict[c]['muts'][mut_name]['ccf_hat'].append(ccf_hat)
                 cluster_dict[c]['muts'][mut_name]['alt_cnt'].append(alt_cnt)
                 cluster_dict[c]['muts'][mut_name]['ref_cnt'].append(ref_cnt)
+                cluster_dict[c]['muts'][mut_name]['chrom'] = chrom
+                cluster_dict[c]['muts'][mut_name]['pos'] = pos
                 if len(sample_names) == 1:
                     cluster_dict[c]['muts'][mut_name]['ccf_dist'] = [float(fields[k]) for k in ccf_dist_keys]
                 if sample == sample_names[0]:
@@ -331,7 +350,7 @@ class PhylogicOutput(object):
             pie_plots: List of base64-encoded pngs for pie plots
             child_dicts: List of dicts mapping parent to list of children (with None mapping to [trunk])
             treatment_data: List of treatments of the format {"tx": str, "tx_start": num, "tx_end": num}
-            tumor_sizes: List of tumor sizes of each sample
+            tumor_sizes: List of date/tumor size pairs
             tree_iterations: List of number of iterations for each tree
 
         Returns:
@@ -544,6 +563,12 @@ class PhylogicOutput(object):
 
     @staticmethod
     def plot_1d_clusters(cluster_ccf_file):
+        """
+        Creates directory of 1d cluster ccf plots for each sample
+        Args:
+            cluster_ccf_file: path to cluster_ccfs file
+
+        """
         def scale_x(x):
             return 400 * x + 50
 
@@ -654,6 +679,12 @@ class PhylogicOutput(object):
 
     @staticmethod
     def plot_1d_mutations(mutation_ccf_file):
+        """
+        Creates directory of 1d mutation ccf plots for each sample
+        Args:
+            mutation_ccf_file: path to mut_ccfs file
+
+        """
         def scale_x(x):
             return 400 * x + 50
 

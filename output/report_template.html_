@@ -1226,10 +1226,13 @@
             table_el = d3.select(document.createElement("table"))
               .attr("id", "cluster_table")
               .attr("class", "hover"),
-            col_width = Math.round(100 / (aliases.length + 1.3)),
-            cluster_col_width = 100 - (aliases.length * col_width),
-            columns = [{"data": "Cluster", "width": cluster_col_width + "%"}],
-            col_list = ["Cluster"];
+            col_width = Math.round(82 / (aliases.length + 1.3)),
+            cluster_col_width = 82 - (aliases.length * col_width),
+            columns = [{"data": "Cluster", "width": cluster_col_width + "%"},
+              {"data": "Chromosome", "width": "9%"},
+              {"data": "Position", "width": "9%"}
+            ],
+            col_list = ["Cluster", "Chromosome", "Position"];
           for (let i in aliases) {
             columns.push({"data": aliases[i] + " CCF", "width": col_width + "%"});
             col_list.push(aliases[i] + " CCF");
@@ -1241,7 +1244,7 @@
             .text(d => d);
           let cluster_data = [];
           for (let c in cluster_dict) {
-            let cluster_dat = {"Cluster": c};
+            let cluster_dat = {"Cluster": c, "Chromosome": null, "Position": null};
             for (let i in aliases) {
               cluster_dat[aliases[i] + " CCF"] = cluster_dict[c].ccf_hat[i] + " (" + cluster_dict[c].ccf_low[i] + "-" + cluster_dict[c].ccf_high[i] + ")";
             }
@@ -1300,8 +1303,12 @@
                   aliases = widg.options.aliases,
                   mut_data = [];
                 for (let mut in cluster_muts) {
-                  let mut_dat = {"is_driver": drivers.includes(mut) ? 0 : 1, "Cluster": mut},
-                    is_cnv = mut.startsWith("gain") || mut.startsWith("loss") || mut === "WGD";
+                  let mut_dat = {"is_driver": drivers.includes(mut) ? 0 : 1,
+                      "Cluster": mut,
+                      "Chromosome": cluster_muts[mut].chrom,
+                      "Position": cluster_muts[mut].pos
+                    },
+                    is_cnv = mut.startsWith("gain") || mut.startsWith("loss") || mut.startsWith("homdel") || mut === "WGD";
                   for (let i in aliases) {
                     mut_dat[aliases[i] + " CCF"] = cluster_muts[mut].ccf_hat[i] +
                       (is_cnv ? "" : " (" + cluster_muts[mut].alt_cnt[i] + ":" + cluster_muts[mut].ref_cnt[i] + ")");
@@ -1339,8 +1346,12 @@
               aliases = this.options.aliases,
               mut_data = [];
             for (let mut in cluster_muts) {
-              let mut_dat = {"is_driver": drivers.includes(mut) ? 0 : 1, "Cluster": mut},
-                is_cnv = mut.startsWith("gain") || mut.startsWith("loss") || mut === "WGD";
+              let mut_dat = {"is_driver": drivers.includes(mut) ? 0 : 1,
+                  "Cluster": mut,
+                  "Chromosome": cluster_muts[mut].chrom,
+                  "Position": cluster_muts[mut].pos
+                },
+                is_cnv = mut.startsWith("gain") || mut.startsWith("loss") || mut.startsWith("homdel") || mut === "WGD";
               for (let i in aliases) {
                 mut_dat[aliases[i] + " CCF"] = cluster_muts[mut].ccf_hat[i] +
                   (is_cnv ? "" : " (" + cluster_muts[mut].alt_cnt[i] + ":" + cluster_muts[mut].ref_cnt[i] + ")");
@@ -1371,6 +1382,47 @@
 
         hide_mutations: function(cluster) {
           this._elements.cluster_datatable.row(cluster - 1).child.hide();
+        },
+
+        download_as_tsv: function() {
+          let aliases = this.options.aliases,
+            cluster_dict = this.options.cluster_dict,
+            columns = ["Cluster", "Mutation", "Driver", "Chromosome", "Position", ...aliases.map(d => d + " CCF")],
+            dl_link = "data:text/plain;charset=utf-8,";
+          
+          let is_driver = function(mut, drivers) {
+            if (mut.startsWith("gain") || mut.startsWith("loss") || mut.startsWith("homdel") || mut === "WGD") {
+              return null
+            }
+            return drivers.includes(mut)
+          };
+
+          dl_link += columns.join("\t") + "\n";
+          for (let c in cluster_dict) {
+            let cluster_row = [c, null, null, null, null, ...aliases.map(
+              (_, i) => cluster_dict[c].ccf_hat[i]
+                + " (" + cluster_dict[c].ccf_low[i]
+                + "-" + cluster_dict[c].ccf_high[i] + ")")];
+            dl_link += cluster_row.join("\t") + "\n";
+            let cluster_muts = cluster_dict[c].muts,
+              drivers = cluster_dict[c].drivers,
+              mut_rows = Object.keys(cluster_muts).map(
+                d => [c, d, is_driver(d, drivers), cluster_muts[d].chrom, cluster_muts[d].pos,
+                  ...aliases.map((_, i) => cluster_muts[d].ccf_hat[i] + " ("
+                    + cluster_muts[d].alt_cnt[i] + ":"
+                    + cluster_muts[d].ref_cnt[i] + ")"
+                  )
+                ].join("\t")
+              );
+            dl_link += mut_rows.join("\n") + "\n"
+          }
+
+          let dl = document.createElement("a");
+          document.body.appendChild(dl);
+          dl.setAttribute("href", dl_link);
+          dl.setAttribute("download", "@@indiv_id" + ".cluster_table.tsv");
+          dl.click();
+
         }
 
       });
@@ -1867,10 +1919,10 @@
           </h5>
         </div>
         <div id="collapseOne" class="collapse show" aria-labelledby="headingOne">
-          <div class="card-body" style="overflow-x: scroll">
+          <div class="card-body">
             <div class="row">
-              <div id="sample-name-table" style="max-height: 600px; width: 25%; padding-right: 30px; overflow-y: scroll; display: table-cell">
-              </div><div class="border-right" style="overflow-x: scroll; overflow-y: hidden; width: 45%; padding-right: 30px; display: table-cell">
+              <div id="sample-name-table" style="max-height: 600px; width: 25%; padding-right: 30px; display: table-cell">
+              </div><div class="border-right" style="overflow-y: hidden; width: 45%; padding-right: 30px; display: table-cell">
                 <div style="min-width: 450px">
                   <div style="display: inline-block; width: 84%; vertical-align: top">
                     <div id="clustering-plot"></div>
@@ -1878,11 +1930,11 @@
                     <button onclick="$('#clustering-plot').clustering_plot('download')" style="font-size: 12px">Download as SVG</button>
                   </div><div style="display: inline-block; width: 16%; vertical-align: top">
                     <div id="time-switch"></div>
-                    <div id="cluster-switches" style="overflow-y: scroll; overflow-x: hidden"></div>
+                    <div id="cluster-switches" style="overflow-x: hidden"></div>
                   </div>
                 </div>
               </div><div style="width: 30%">
-                <div id="tree" style="overflow: scroll"></div>
+                <div id="tree"></div>
                 <div id="tree-switch"></div>
               </div>
             </div>
@@ -1919,6 +1971,7 @@
             <div class="row">
               <div id="cluster-table" class="col-md-12 overflow-auto"></div>
             </div>
+            <button onclick="$('#cluster-table').cluster_table('download_as_tsv')" style="font-size: 12px">Download as TSV</button>
           </div>
         </div>
       </div>
@@ -1934,10 +1987,10 @@
           <div class="card-body">
             <div class="row">
               <div class="col-md-6 text-center">
-                <div id="mutation-plot" style="overflow-x:scroll"></div>
+                <div id="mutation-plot"></div>
                 <button onclick="$('#mutation-plot').mutation_plot('download')" style="font-size: 12px">Download as SVG</button>
               </div>
-              <div class="col-md-6 text-center" style="overflow-x:scroll">
+              <div class="col-md-6 text-center">
                 <div id="fish-plot"></div>
               </div>
             </div>
