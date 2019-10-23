@@ -2,6 +2,7 @@
 # Patient - central class to handle and store sample CCF data
 ##########################################################
 from Sample import TumorSample
+from Sample import RNASample
 from SomaticEvents import SomMutation, CopyNumberEvent
 import os
 import sys
@@ -53,8 +54,11 @@ class Patient:
         self.indiv_name = indiv_name
         # :type : list [TumorSample]
         self.sample_list = []
+        self.rna_sample_list = []
 
         self.samples_synchronized = False
+        self.rna_samples_synchronized = False
+        self.concordant_genes = []
         self.driver_genes = self._parse_driver_g_file(driver_genes_file)
         self.ccf_grid_size = ccf_grid_size
 
@@ -94,6 +98,33 @@ class Patient:
     def initPatient(self):
         """ accepted input types abs; txt; sqlite3 .db # auto tab if .txt, .tsv or .tab ; abs if .Rdata; sqlite if .db """
         raise NotImplementedError
+
+    def addRNAsample(self, filen, sample_name, input_type='auto', purity=None, timepoint=None):
+        """ Accepted input types rsem.genes """
+        # make new sample and add to exiting list of samples
+        logging.info("Adding expression from RNA Sample: %s", sample_name)
+        new_rna_sample = RNASample(filen, input_type, indiv=self.indiv_name, sample_name=sample_name,
+                                   timepoint=timepoint, purity=purity)
+        self.rna_sample_list.append(new_rna_sample)
+        logging.info('Added RNA sample ' + new_rna_sample.sample_name)
+        # turn of concordance flag when new sample is added
+        self.rna_samples_synchronized = False
+
+    def preprocess_rna_samples(self):
+
+        count_low_exp_genes = 0
+        gene_ids = self.rna_sample_list[0].get_gene_ids()
+        for gene_id in gene_ids:
+            tpm_values = []
+            for sample in self.rna_sample_list:
+                tpm_values.append(sample.get_tpm_by_gene_id(gene_id))
+            if all(i <= 1.0 for i in tpm_values):
+                count_low_exp_genes += 1
+            else:
+                self.concordant_genes.append(gene_id)
+        self.rna_samples_synchronized = True
+        logging.debug('{} genes have TPM values less a than 1.0 across all timepoints.'.format(count_low_exp_genes))
+        logging.debug('{} genes will be used in the analysis.'.format(len(self.concordant_genes)))
 
     def addSample(self, filen, sample_name, input_type='auto', grid_size=101, seg_file=None, _additional_muts=None,
                   purity=None, timepoint_value=None):
@@ -308,7 +339,7 @@ class Patient:
                     break
                 for ii, cluster_ccfs in enumerate(clust_CCF_results):
                     cluster_ccf = cluster_ccfs[i]
-                    if abs(np.argmax(mut.ccf_1d) - np.argmax(cluster_ccf)) > 50:
+                    if abs(np.argmax(mut.ccf_1d) - np.argmax(cluster_ccf)) > 70:
                         dot = 0.
                     else:
                         dot = max(sum(np.array(mut.ccf_1d) * cluster_ccf), .0001)
@@ -377,8 +408,7 @@ class Patient:
                     ccf_low += np.array(seg[4])
                 yield (bands, cns, ccf_hat / len(R), ccf_high / len(R), ccf_low / len(R))
             else:
-                pivot = (event_segs - neighbors[p] for p in event_segs | X)
-                for s in min(pivot, key=len):
+                for s in event_segs:
                     if isadjacent(s, R):
                         for region in merge_cn_events(event_segs & neighbors[s], neighbors, R=R | {s}, X=X & neighbors[s]):
                             yield region
@@ -546,27 +576,26 @@ class NDHistogram:
         return {}
 
 
+_cytoband_dict = {}
+with open(os.path.dirname(__file__) + '/supplement_data/cytoBand.txt', 'r') as _f:
+    for _i, _line in enumerate(_f):
+        _row = _line.strip('\n').split('\t')
+        _cytoband_dict[(_row[0], _row[3])] = _i
+
 class Cytoband:
+    band_nums = _cytoband_dict
 
     def __init__(self, chrom, band):
-        self.chrom = chrom
+        self.chrom = chrom if chrom.startswith('chr') else 'chr' + chrom
         self.band = band
 
     def __sub__(self, other):
         if not isinstance(other, Cytoband):
             raise TypeError('Cannot subtract Cytoband with ' + str(type(other)))
         if self.chrom == other.chrom:
-            self_num = -1
-            other_num = -1
-            with open(os.path.dirname(__file__) + '/supplement_data/cytoBand.txt', 'r') as f:
-                for i, line in enumerate(f):
-                    row = line.strip('\n').split('\t')
-                    if row[0] == 'chr' + str(self.chrom) and row[3] == self.band:
-                        self_num = i
-                    if row[0] == 'chr' + str(other.chrom) and row[3] == other.band:
-                        other_num = i
-                    if self_num >= 0 and other_num >= 0:
-                        return self_num - other_num
+            self_num = self.band_nums[(self.chrom, self.band)]
+            other_num = self.band_nums[(other.chrom, other.band)]
+            return self_num - other_num
         raise ValueError('Cannot subtract cytobands on different chromosomes')
 
     def __lt__(self, other):

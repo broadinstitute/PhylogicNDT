@@ -1,7 +1,6 @@
 import numpy as np
 import random
 import logging
-from emd import emd
 
 from scipy.misc import logsumexp as logsumexp_scipy
 
@@ -65,6 +64,8 @@ def emd_nd(u, v):
     Uses https://github.com/garydoranjr/pyemd
     Need to convert probability distribution in non-log space
     """
+    # TODO: remove this dependency
+    from emd import emd
     return emd(np.exp(u), np.exp(v))
 
 

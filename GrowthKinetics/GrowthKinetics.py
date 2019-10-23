@@ -1,25 +1,21 @@
 import sys
 import logging
-from BuildTree.ClusterObject import Cluster
-from BuildTree.Tree import Tree
-import data.Patient as Patient
-from .GrowthKineticsEngine import GrowthKineticsEngine
 
-from BuildTree.BuildTreeEngine import BuildTreeEngine
 
-sys.path.append('../')
-
-logging.basicConfig(filename='growth_kinetics.log',
-                    filemode='w',
-                    format='%(asctime)s - %(levelname)s - %(message)s',
-                    datefmt='%d-%b-%y %H:%M:%S',
-                    level=getattr(logging, "DEBUG"))
+# sys.path.append('../')
 
 
 # Main run method
 
 def run_tool(args):
     logging.debug('Arguments {}'.format(args))
+
+    from BuildTree.ClusterObject import Cluster
+    from BuildTree.Tree import Tree
+    import data.Patient as Patient
+    from .GrowthKineticsEngine import GrowthKineticsEngine
+
+    from BuildTree.BuildTreeEngine import BuildTreeEngine
 
     # init a Patient
     patient_data = Patient.Patient(indiv_name=args.indiv_id, driver_genes_file=args.driver_genes_file)

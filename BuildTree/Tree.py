@@ -34,39 +34,35 @@ class Tree:
         logging.debug('Tree initialized with edges {}'.format(self.edges))
 
     def __repr__(self):
-        '''
-        Represent tree
-        Returns:
-
-        '''
+        """
+        Tree object representation
+        """
         return repr(self._edges), [repr(node) for identifier, node in self._nodes.items()]
 
     def add_edge(self, parent, child):
-        """ Adds edge to the tree (tuple of node's identifiers).
-            Creates new nodes if any missing """
-        missing_nodes = [node for node in [parent, child] if node.identifier not in self._nodes]
-
-        self.add_nodes(missing_nodes)
-        self._edges.append((parent.identifier, child.identifier))
-        # add child for parent node
-        parent.add_child(child.identifier)
-        # set parent for child node
-        child.set_parent(parent)
+        """
+        Adds edge to the tree (tuple of node's identifiers).
+        Creates new nodes if any missing
+        """
+        if parent:
+            missing_nodes = [node for node in [parent, child] if node.identifier not in self._nodes]
+            self.add_nodes(missing_nodes)
+            self._edges.append((parent.identifier, child.identifier))
+            # add child for parent node
+            parent.add_child(child.identifier)
+            # set parent for child node
+            child.set_parent(parent)
+        else:
+            self._edges.append((None, child.identifier))
 
     def add_edges(self, edges):
         for (parent_id, child_id) in edges:
-            self.add_edge(self._nodes[parent_id], self._nodes[child_id])
+            if parent_id and child_id:
+                self.add_edge(self._nodes[parent_id], self._nodes[child_id])
 
     def remove_edge(self, parent, child):
-        '''
-
-        Args:
-            parent:
-            child:
-
-        Returns:
-
-        '''
+        """
+        """
         # verify that nodes exist in the tree
         if parent.identifier in self._nodes and child.identifier in self._nodes:
             # verify that edge exists
@@ -89,7 +85,7 @@ class Tree:
 
     def add_node(self, identifier, data=None, parent=None, children=None, root=False):
         node = Node(identifier, data, children, parent)
-        if identifier not in self._nodes:
+        if identifier and identifier not in self._nodes:
             self._nodes[identifier] = node
         else:
             logging.error('Node with this %s exists in the tree' % str(identifier))
@@ -113,15 +109,19 @@ class Tree:
         return self._nodes
 
     def get_node_by_id(self, identifier):
-        return self._nodes[identifier]
+        if identifier in self._nodes:
+            return self._nodes[identifier]
+        else:
+            logging.debug('Node with id {} is not in the list of nodes'.format(identifier))
+            return None
 
     def size(self):
         return len(self._nodes)
 
     def get_random_node(self):
-        '''
-        Returns:
-        '''
+        """
+        :returns any node in the Tree except Clonal
+        """
         # avoid picking clonal cluster (1)
         nodes_to_choose = [n for n in self._nodes.keys() if n != self._root.identifier]
         return self._nodes[np.random.choice(nodes_to_choose)]
@@ -255,9 +255,6 @@ class Tree:
     @staticmethod
     def get_possible_configurations(potential_children):
         """
-
-        :param potential_children:
-        :return:
         """
         new_children = []
         # Can only "borrow" up to 3 children of it's potential parent
@@ -358,5 +355,5 @@ class Tree:
         while current_parent:
             ancestry.append(current_parent.identifier)
             current_parent = current_parent.parent
-        logging.debug('Ancestory for node {} is {}'.format(node_id, ancestry[::-1]))
+        logging.debug('Ancestry for node {} is {}'.format(node_id, ancestry[::-1]))
         return ancestry[::-1]

@@ -8,11 +8,10 @@ import logging
 import numpy as np
 
 # modules from this PhylogicNDT package
-import DpEngine
+from .DpEngine import DpEngine
 
 
 class ClusterEngine:
-
 
     def __init__(self, patient):
         """
@@ -41,7 +40,7 @@ class ClusterEngine:
             PriorK = {'r': 10, 'mu': 10}  # standard values
 
         nd_hist = self.patient._make_ND_histogram()
-        clustering = DpEngine.DpEngine(nd_hist, N_iter, PriorK)
+        clustering = DpEngine(nd_hist, N_iter, PriorK)
         self.results = clustering.results
         self._ND_cluster_postprocess()  # Set cluster assignment, etc.
         self._ND_assign_setaside_mutations()
@@ -95,21 +94,24 @@ class ClusterEngine:
             if mut in combined_blacklist: continue  # skip blacklisted mutations!!
             mut_row = []
             if 'WGD' in mut.var_str:
-                       for sample in data.sample_list:
-                            print sample.WGD_status
-                       for sample in data.sample_list:
-                            mut_row.append(sample.get_mut_by_varstr(mut.var_str))
+                for sample in data.sample_list:
+                    print
+                    sample.WGD_status
+                for sample in data.sample_list:
+                    mut_row.append(sample.get_mut_by_varstr(mut.var_str))
             if len(mut_row) < len(data.sample_names):
                 continue
 
-            if mut in combined_lowcov: # for lowcov/indels, assign based on likelihoods of joining clusters estimated from ccf_dist
+            if mut in combined_lowcov:  # for lowcov/indels, assign based on likelihoods of joining clusters estimated from ccf_dist
                 pvals = np.zeros((nclusters, len(data.sample_names)))
                 for sample_index, ccf in enumerate([np.array(x.ccf_1d) for x in mut_row]):
 
                     for cluster_index, cluster in enumerate(results["clust_CCF_dens"]):
-                        pvals[cluster_index][sample_index] = sum(cluster[sample_index] / sum(cluster[sample_index]) * ccf)
+                        pvals[cluster_index][sample_index] = sum(
+                            cluster[sample_index] / sum(cluster[sample_index]) * ccf)
 
-                    data.sample_list[sample_index].concordant_variants.append(data.sample_list[sample_index].get_mut_by_varstr(mut.var_str))
+                    data.sample_list[sample_index].concordant_variants.append(
+                        data.sample_list[sample_index].get_mut_by_varstr(mut.var_str))
                 pvals = np.prod(pvals, axis=1)
                 mut_assignment = pvals.argmax() + 1
                 self.results["assign"] = np.append(self.results["assign"], mut_assignment)
@@ -117,14 +119,17 @@ class ClusterEngine:
                 for sample_specific_mut in mut_row:
                     sample_specific_mut.cluster_assignment = mut_assignment
                 muts_added += 1
-            elif mut in combined_cnvs: # for cnvs, assign based on point estimate of nearest clusters
+            elif mut in combined_cnvs:  # for cnvs, assign based on point estimate of nearest clusters
                 ccf_diffs = np.zeros((nclusters, len(data.sample_names)))
                 for sample_index, ccf in enumerate([np.array(x.ccf_1d) for x in mut_row]):
 
                     for cluster_index, cluster in enumerate(results["clust_CCF_dens"]):
-                        ccf_diffs[cluster_index][sample_index] = abs(np.argmax(cluster[sample_index])/float(grid_size-1)-np.argmax(ccf)/float(grid_size-1))
+                        ccf_diffs[cluster_index][sample_index] = abs(
+                            np.argmax(cluster[sample_index]) / float(grid_size - 1) - np.argmax(ccf) / float(
+                                grid_size - 1))
 
-                    data.sample_list[sample_index].concordant_variants.append(data.sample_list[sample_index].get_mut_by_varstr(mut.var_str))
+                    data.sample_list[sample_index].concordant_variants.append(
+                        data.sample_list[sample_index].get_mut_by_varstr(mut.var_str))
                 summed_diffs = np.sum(ccf_diffs, axis=1)
                 mut_assignment = summed_diffs.argmin() + 1
                 max_diff_across_all_samples = np.max(ccf_diffs[summed_diffs.argmin()])
@@ -157,8 +162,8 @@ class ClusterEngine:
                     updated_concortdant_variants.append(mut)
             sample.concordant_variants = updated_concortdant_variants
 
-        logging.info("Re-added {} low coverage mutations and indels, of {} that were removed.".format(muts_added, len(combined_lowcov.union(combined_cnvs))))
-
+        logging.info("Re-added {} low coverage mutations and indels, of {} that were removed.".format(muts_added, len(
+            combined_lowcov.union(combined_cnvs))))
 
     def _build_common_sample_clone_table(self):
         data = self.patient
@@ -171,32 +176,32 @@ class ClusterEngine:
             var_classes[smpl_index] = []
             for mut_index, mut in enumerate(sample.concordant_variants):
                 if results["clust_CCF_dens"][results["assign"][mut_index] - 1][smpl_index].argmax() / float(
-                                grid_size - 1) >= 0.95:
+                        grid_size - 1) >= 0.95:
                     mut.cluster_assignment = results["assign"][mut_index]
 
                     var_classes[smpl_index].append("C")
                     # logging.info( 'adding mutation as private clonal '+str(mut.var_str))
                     if mut not in self.common_mutations:
                         self.common_mutations[mut] = [0] * (
-                        len(data.sample_list) + 1)  # init as zeros for all including normal
+                                len(data.sample_list) + 1)  # init as zeros for all including normal
                     self.common_mutations[mut][smpl_index] = 1
                 else:
                     var_classes[smpl_index].append("S")
 
                 if results["clust_CCF_dens"][results["assign"][mut_index] - 1][smpl_index].argmax() / float(
-                                grid_size - 1) >= 0.90:
+                        grid_size - 1) >= 0.90:
                     # logging.info( 'adding mutation as private clonal '+str(mut.var_str))
                     if mut not in tree_building_mutations:
                         tree_building_mutations[mut] = [0] * (
-                        len(data.sample_list) + 1)  # init as zeros for all including normal
+                                len(data.sample_list) + 1)  # init as zeros for all including normal
                     tree_building_mutations[mut][smpl_index] = 1
                 elif results["clust_CCF_dens"][results["assign"][mut_index] - 1][smpl_index].argmax() / float(
-                                grid_size - 1) >= 0.25:
+                        grid_size - 1) >= 0.25:
                     if mut not in tree_building_mutations:
                         tree_building_mutations[mut] = [0] * (
-                        len(data.sample_list) + 1)  # init as zeros for all including normal
+                                len(data.sample_list) + 1)  # init as zeros for all including normal
                     tree_building_mutations[mut][
-                        smpl_index] = 0#.5  # results["clust_CCF_dens"][results["assign"][mut_index]-1][smpl_index].argmax()/float(grid_size-1)
+                        smpl_index] = 0  # .5  # results["clust_CCF_dens"][results["assign"][mut_index]-1][smpl_index].argmax()/float(grid_size-1)
 
         for smpl_index, sample in enumerate(data.sample_list):
             for mut_index, mut in enumerate(sample.concordant_variants):
@@ -212,7 +217,7 @@ class ClusterEngine:
                 elif mut not in self.common_mutations:
                     if mut not in self.common_subclones:
                         self.common_subclones[mut] = [0] * (
-                        len(data.sample_list) + 1)  # init as zeros for all including normal
+                                len(data.sample_list) + 1)  # init as zeros for all including normal
                     self.common_subclones[mut][smpl_index] = 0.5
 
         return tree_building_mutations
@@ -227,5 +232,3 @@ class ClusterEngine:
         prior_size = grid_length
         clust_CCF_prior = [1.0 / prior_size] * (prior_size)  # make list grid_size^2 with normalized
         return clust_CCF_prior
-
-

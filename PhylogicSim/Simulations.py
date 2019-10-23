@@ -5,7 +5,7 @@ def run_tool(args):
     import SimEngine
 
     if args.nsamp < 2:
-        print "Minimum number of samples to simulate is 2, resetting to 2 samples."
+        print("Minimum number of samples to simulate is 2, resetting to 2 samples.")
         args.nsamp = 2
 
     # TODO: Allow for only the clonal cluster to be simulated (args.min_nodes=1)

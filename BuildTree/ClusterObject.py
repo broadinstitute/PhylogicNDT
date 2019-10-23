@@ -14,8 +14,9 @@ else:
 
 class Cluster:
 
-    def __init__(self, identifier, time_points, num_bins=101):
+    def __init__(self, identifier, time_points, num_bins=101, blacklist_threshold=0.1):
         self._identifier = identifier
+        self._blacklist_threshold = blacklist_threshold
         self._densities = {}
         # Dictionary of mutations with key: mutation.var_str and value: nd histogram in log space
         self._mutations = {}
@@ -99,7 +100,8 @@ class Cluster:
             logging.debug("Added mutation {} to cluster {}.".format(mutation.var_str, self._identifier))
         else:
             logging.error(
-                "Can not add mutation {} to cluster {}. It is already there.".format(mutation.var_str, self._identifier))
+                "Can not add mutation {} to cluster {}. It is already there.".format(mutation.var_str,
+                                                                                     self._identifier))
 
     def remove_mutation(self, mutation, update_cluster_hist=True):
         """ """
@@ -162,12 +164,12 @@ class Cluster:
         grid_size = self._hist.shape[1]
         return np.sum(self._hist * np.arange(grid_size) / (grid_size - 1), axis=1)
 
-    def _low_ccf_check(self, threshold):
-        return all([ccf_mean < threshold for ccf_mean in self.cluster_means()])
+    def _low_ccf_check(self):
+        return all([ccf_mean <= self._blacklist_threshold for ccf_mean in self.cluster_means()])
 
-    def set_blacklist_status(self, threshold=0.1):
+    def set_blacklist_status(self):
         """ Checks if ccf mean across all samples is below a threshold, blacklist cluster """
-        if self._low_ccf_check(threshold):
+        if self._low_ccf_check():
             self._blacklisted = True
         else:
             self._blacklisted = False

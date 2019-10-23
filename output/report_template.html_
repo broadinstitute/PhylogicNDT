@@ -1796,6 +1796,15 @@
             .style("text-decoration", "underline")
             .text("Tumor abundance plot");
 
+          fish_plot.selectAll("circle")
+            .data(Object.keys(tumor_sizes).filter(d => d >= Math.min(...time_points) & d <= Math.max(...time_points)))
+            .join("circle")
+            .attr("cx", d => x(d))
+            .attr("cy", d => y(tumor_sizes[d]))
+            .attr("r", 3)
+            .attr("fill", "black")
+            .attr("opacity", 0.5);
+
           let t0 = time_points[0],
             linspace = [t0],
             step = (time_points[time_points.length - 1] - t0) / 100;
@@ -1921,7 +1930,7 @@
         <div id="collapseOne" class="collapse show" aria-labelledby="headingOne">
           <div class="card-body">
             <div class="row">
-              <div id="sample-name-table" style="max-height: 600px; width: 25%; padding-right: 30px; display: table-cell">
+              <div id="sample-name-table" style="max-height: 600px; width: 25%; padding-right: 30px; overflow-y: auto; display: table-cell">
               </div><div class="border-right" style="overflow-y: hidden; width: 45%; padding-right: 30px; display: table-cell">
                 <div style="min-width: 450px">
                   <div style="display: inline-block; width: 84%; vertical-align: top">

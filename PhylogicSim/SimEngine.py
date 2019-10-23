@@ -495,7 +495,7 @@ def run_simulations(args):
                 # If it finds a bad cluster, regenerate the ccfs/resample tree.
                 if good_clust == 0: break
 
-            # This exectued at the end of the for loop run, once we have checked that all the clusters and made sure they are ok.
+            # This executed at the end of the for loop run, once we have checked that all the clusters and made sure they are ok.
             else:
                 good_sim = 1
 
@@ -562,9 +562,9 @@ def run_simulations(args):
     #Generate the Coveage
     if args.cov_file is not None:
         print 'Using provided coverage file to sample coverage.'
-        coverage_samp=[int(x.strip("\n")) for x in open(args.cov_file).readlines() if int(x.strip("\n")) > 0]
+        coverage_samp = [int(x.strip("\n")) for x in open(args.cov_file).readlines() if int(x.strip("\n")) > 0]
         random.shuffle(coverage_samp)
-        coverage_samp=itertools.cycle(coverage_samp)
+        coverage_samp = itertools.cycle(coverage_samp)
 
     else:
         print 'Using betabinomial coverage distribution with alpha ' + str(alpha) + ' beta ' + str(
@@ -572,21 +572,21 @@ def run_simulations(args):
         print 'Binomial mean will be modified in cases where copy number is different from 2'
         coverage_samp = None
 
-    #Number of values to calculate for the ccf. Why is this not a parametere that's passed in?
+    # Number of values to calculate for the ccf. Why is this not a parametere that's passed in?
     global grid_size
     grid_size = 101
 
     ### SET CLUSTER PROPORTIONS OF MUTATIONS ###
-    # Cluster proprtions, that is, the percentage of mutations in each cluster.
-    # This proportion is assigned at random and then renormalized. args.artifatcts represents
-    #the proprtion of mutations that are artifacts.
+    # Cluster proportions, that is, the percentage of mutations in each cluster.
+    # This proportion is assigned at random and then renormalized. args.artifacts represents
+    # the proportion of mutations that are artifacts.
     clust_props=[random.random()+0.1 for x in sorted(clusters)[0]]
     clust_props=[x/sum(clust_props[:-1])*(1-args.artifacts) for x in clust_props[:-1]]+[args.artifacts]
     print "Cluster Proportions:"
     print clust_props
 
     ### PREPARE CN INPUT ###
-    # TODO: Remove cn_dist once it's depracated
+    # TODO: Remove cn_dist once it's deprecated
     # Read the cn distribution file. If no segments file provided, use the standard hg19 values.
     if args.cn_dist == None:
         cn_dist = [1, 2, 2, 2, 2, 2, 3, 4, 4]
@@ -623,6 +623,17 @@ def run_simulations(args):
                                                                                    beta=beta, nbin=nbin,
                                                                                    coverage_gen=coverage_samp,
                                                                                    segment_dict=segment_data)
+
+    # Creating sif file for this simulations
+    header = ['sample_id', 'maf_fn', 'seg_fn', 'purity', 'timepoint']
+    import inspect, os
+    path = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
+    with open(args.indiv_id + '.sif', 'w') as writer:
+        writer.write('\t'.join(header) + '\n')
+        for j in range(len(a)):
+            sample_name = args.indiv_id + "_" + str(j)
+            line = [sample_name, path + '/' + sample_name + ".txt", '', str(args.purity), str(j)]
+            writer.write('\t'.join(line) + '\n')
 
     ### OUTPUT ###
     for j in range(len(a)):

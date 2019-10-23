@@ -64,9 +64,11 @@ class PhylogicOutput(object):
                     cluster_dict[c]['muts'][mut_name]['ccf_hat'].append(ccf_hat)
                     cluster_dict[c]['muts'][mut_name]['alt_cnt'].append(alt_cnt)
                     cluster_dict[c]['muts'][mut_name]['ref_cnt'].append(ref_cnt)
+                    cluster_dict[c]['muts'][mut_name]['chrom'] = mut.chrN
                     if mut.type != 'CNV':
-                        cluster_dict[c]['muts'][mut_name]['chrom'] = mut.chrN
                         cluster_dict[c]['muts'][mut_name]['pos'] = mut.pos
+                    else:
+                        cluster_dict[c]['muts'][mut_name]['pos'] = ''
                     if len(sample_names) == 1:
                         cluster_dict[c]['muts'][mut_name]['ccf_dist'] = list(map(float, mut.ccf_1d))
                     if i == 0:
@@ -145,7 +147,7 @@ class PhylogicOutput(object):
                                                    'tx_end': float(fields['tx_end']) if fields['tx_end'] else timepoints[-1]})
                 if tumor_sizes_file:
                     with open(tumor_sizes_file, 'r') as f:
-                        f.readline()
+                        # f.readline()
                         tumor_sizes = [list(map(float, line.strip('\n\r').split('\t'))) for line in f]
                 else:
                     tumor_sizes = [[t, 1.] for t in timepoints]
@@ -234,8 +236,11 @@ class PhylogicOutput(object):
                     unique_cnvs[sample].add(mut_name)
                     ccf_hat = float(fields['preDP_ccf_mean'])
                     c = int(fields['Cluster_Assignment'])
+                    chrom = fields['Chromosome']
                     cluster_dict[c]['muts'].setdefault(mut_name, {'ccf_hat': []})
                     cluster_dict[c]['muts'][mut_name]['ccf_hat'].append(ccf_hat)
+                    cluster_dict[c]['muts'][mut_name]['chrom'] = chrom
+                    cluster_dict[c]['muts'][mut_name]['pos'] = ''
                     if len(sample_names) == 1:
                         cluster_dict[c]['muts'][mut_name]['ccf_dist'] = [float(fields[k]) for k in ccf_dist_keys]
                     if sample == sample_names[0]:
@@ -245,26 +250,28 @@ class PhylogicOutput(object):
             cluster_dict[c]['color'] = ClusterColors.get_rgb_string(c)
         edges_list = []
         tree_iterations = []
+        # Removed eval when reading file
         with open(tree, 'r') as tree_fh:
             header = tree_fh.readline().strip('\n\r').split('\t')
             for line in tree_fh:
                 row = line.strip('\n\r').split('\t')
-                edges_list.append(eval(row[header.index('edges')]))
+                edges = self.reformat_edges_for_input(row[header.index('edges')])
+                edges_list.append(edges)
                 tree_iterations.append(row[header.index('n_iter')])
         child_dicts = []
         for i, e in enumerate(edges_list):
             child_dicts.append({n: [] for n in itertools.chain(*e)})
-            child_dicts[-1].update({None: [1]})
+            # child_dicts[-1].update({None: [1]})
             for parent, child in e:
                 child_dicts[-1][parent].append(child)
         edges = edges_list[0]
         tree = BuildTree.Tree.Tree()
         for identifier in set(itertools.chain(*edges)):
-            tree.add_node(identifier)
-        for parent, child in edges:
-            tree.add_edge(tree.get_node_by_id(parent), tree.get_node_by_id(child))
+            if identifier:
+                tree.add_node(identifier)
+        tree.add_edges(edges)
         tree.set_root(tree.get_node_by_id(1))
-        constrained_ccfs = {c: {} for c in tree.nodes.keys()}
+        constrained_ccfs = {c: {} for c in tree.nodes.keys() if c}
         cell_abundances = {s: {} for s in sample_names}
         with open(abundances, 'r') as abun_fh:
             header = abun_fh.readline().strip('\n\r').split('\t')
@@ -275,7 +282,6 @@ class PhylogicOutput(object):
                 sample_name = fields['Sample_ID']
                 cell_abundances[sample_name][c] = cell_abundance
                 constrained_ccfs[c][sample_name] = (cell_abundance / 100.)
-
         for c in constrained_ccfs:
             cluster_dict[c]['tumor_abundance'] = [constrained_ccfs[c][s] for s in sample_names]
         pie_plot_dir = '{}_pie_plots'.format(patient)
@@ -423,7 +429,7 @@ class PhylogicOutput(object):
                             'child_dict': child_dicts[0], 'tree_coordinates': tree_coordinates_list[0]}
             if len(child_dicts) > 1:
                 tree_switch_options = {'patient': patient, 'cluster_dict': cluster_dict, 'child_dicts': child_dicts,
-                    'tree_coordinates': tree_coordinates_list, 'tree_iterations': tree_iterations}
+                                       'tree_coordinates': tree_coordinates_list, 'tree_iterations': tree_iterations}
 
         if treatment_data:
             treatment_plot_options = {'treatments': treatment_data, 'samples': time_points,
@@ -510,7 +516,7 @@ class PhylogicOutput(object):
         def ccw(A, B, C):
             return (C[1] - A[1]) * (B[0] - A[0]) > (B[1] - A[1]) * (C[0] - A[0])
 
-        def cost_function(coord_dict):
+        def cost_function(coord_dict, curr_min=np.inf):
             cost = 0.
             # Cost for distance between nodes
             for c1, c2 in itertools.combinations(coord_dict, 2):
@@ -521,6 +527,8 @@ class PhylogicOutput(object):
                     cost += 10. / (dist2 + (10. ** -20))
                 else:
                     cost += 1. / (dist2 + (10. ** -20))
+                if cost > curr_min:
+                    return curr_min + 1
             # Cost for crossing edges and angles < 30 degrees
             for e1, e2 in itertools.combinations(itertools.chain(*map(lambda k: itertools.product([k[0]], k[1]), child_dict.items())), 2):
                 if len(set(e1)) != 2 or len(set(e2)) != 2:
@@ -538,13 +546,17 @@ class PhylogicOutput(object):
                     points.remove(pivot)
                     points = list(points)
                     if points[0] in child_dict[pivot]:
-                        if abs(math.pi - (ang_from_parent[pivot] - ang_from_parent[points[0]])) % math.pi <= math.pi / 6:
+                        if abs(math.pi - (
+                                ang_from_parent[pivot] - ang_from_parent[points[0]])) % math.pi <= math.pi / 6:
                             cost += 10. ** 10
                     elif points[1] in child_dict[pivot]:
-                        if abs(math.pi - (ang_from_parent[pivot] - ang_from_parent[points[1]])) % math.pi <= math.pi / 6:
+                        if abs(math.pi - (
+                                ang_from_parent[pivot] - ang_from_parent[points[1]])) % math.pi <= math.pi / 6:
                             cost += 10. ** 10
                     elif abs(ang_from_parent[points[0]] - ang_from_parent[points[1]]) % math.pi <= math.pi / 6:
                         cost += 10. ** 10
+                if cost > curr_min:
+                    return curr_min + 1
             return cost
 
         ang_from_parent = dict.fromkeys(dist_from_parent, 0.)
@@ -554,11 +566,15 @@ class PhylogicOutput(object):
                 if clust == 1:
                     continue
                 ang_update = dict(ang_from_parent)
-                costs = []
+                min_cost = np.inf
+                min_cost_ang = 0
                 for a in ang_range:
                     ang_update[clust] = a
-                    costs.append(cost_function(get_coords(ang_update)))
-                ang_from_parent[clust] = ang_range[np.argmin(costs)]
+                    curr_cost = cost_function(get_coords(ang_update))
+                    if curr_cost < min_cost:
+                        min_cost = curr_cost
+                        min_cost_ang = a
+                ang_from_parent[clust] = min_cost_ang
         return get_coords(ang_from_parent)
 
     @staticmethod
@@ -588,7 +604,8 @@ class PhylogicOutput(object):
                 ccf_dict[sample][c] = ccf_dist
         if not os.path.exists('{}_1d_cluster_plots'.format(patient)):
             os.mkdir('{}_1d_cluster_plots'.format(patient))
-        zero_str = functools.reduce(lambda acc, curr: acc + ' ' + str(scale_x(curr)) + ',365', np.arange(1., -0.01, -0.01), '')
+        zero_str = functools.reduce(lambda acc, curr: acc + ' ' + str(scale_x(curr)) + ',365',
+                                    np.arange(1., -0.01, -0.01), '')
         for sample in ccf_dict:
             document = dom.Document()
             max_bin = max(itertools.chain(*ccf_dict[sample].values()))
@@ -598,6 +615,7 @@ class PhylogicOutput(object):
 
             def scale_y(y):
                 return 365 - (345 * y / y_max)
+
             svg = document.appendChild(document.createElement('svg'))
             svg.setAttribute('baseProfile', 'full')
             svg.setAttribute('version', '1.1')
@@ -668,7 +686,9 @@ class PhylogicOutput(object):
             ylabel.setAttribute('text-anchor', 'middle')
             ylabel.appendChild(document.createTextNode('Probability density'))
             for c in ccf_dict[sample]:
-                dist_str = functools.reduce(lambda acc, curr: acc + ' ' + str(scale_x(curr[0] * 0.01)) + ',' + str(scale_y(curr[1])), enumerate(ccf_dict[sample][c]), '')
+                dist_str = functools.reduce(
+                    lambda acc, curr: acc + ' ' + str(scale_x(curr[0] * 0.01)) + ',' + str(scale_y(curr[1])),
+                    enumerate(ccf_dict[sample][c]), '')
                 dist = svg.appendChild(document.createElement('polygon'))
                 dist.setAttribute('points', dist_str + zero_str)
                 dist.setAttribute('fill', ClusterColors.get_rgb_string(c))
@@ -789,7 +809,8 @@ class PhylogicOutput(object):
             for c in ccf_dict[sample]:
                 for hist in ccf_dict[sample][c]:
                     dist_str = functools.reduce(
-                        lambda acc, curr: acc + ' ' + str(scale_x(curr[0] * 0.01)) + ',' + str(scale_y(curr[1])), enumerate(hist), '')
+                        lambda acc, curr: acc + ' ' + str(scale_x(curr[0] * 0.01)) + ',' + str(scale_y(curr[1])),
+                        enumerate(hist), '')
                     dist = svg.appendChild(document.createElement('polygon'))
                     dist.setAttribute('points', dist_str + zero_str)
                     dist.setAttribute('fill', ClusterColors.get_rgb_string(c))
@@ -932,20 +953,59 @@ class PhylogicOutput(object):
         with open(indiv_id + '.tree.json', 'w') as tree_fh:
             json.dump({'nodes': nodes, 'edges': edges, 'root': root}, tree_fh)
 
+    """
     @staticmethod
-    def write_tree_tsv(trees_counts, trees_ll, indiv_id):
-        """
-
-        Returns:
-
-        """
+    def write_tree_tsv(trees_counts, trees_ll, indiv_id):        
         # add header
         header = ['n_iter', 'log_lik', 'edges']
         with open(indiv_id + '_build_tree_posteriors.tsv', 'w') as writer:
             writer.write('\t'.join(header) + '\n')
-            for (tree_edges, count) in trees_counts:
-                line = [str(count), '0.0', str(tree_edges)]
+            for i in range(len(trees_counts)):
+                tree_edges, count = trees_counts[i]
+                likelihood = str(trees_ll[i])
+                line = [str(count), likelihood, str(tree_edges)]
                 writer.write('\t'.join(line) + '\n')
+    """
+
+    @staticmethod
+    def reformat_edges_for_output(edges):
+        reformatted_edges = [str(edge[0]) + '-' + str(edge[1]) for edge in edges]
+        reformatted_edges.append('None-1')
+        return ','.join(reformatted_edges)
+
+    @staticmethod
+    def reformat_edges_for_input(edges):
+        edges = [edge.split('-') for edge in edges.split(',')]
+        reformatted_edges = []
+        for (parent, child) in edges:
+            try:
+                parent = int(parent)
+            except ValueError:
+                parent = None
+            try:
+                child = int(child)
+            except ValueError:
+                child = None
+            reformatted_edges.append((parent, child))
+        return reformatted_edges
+
+    def write_tree_tsv(self, trees_df, indiv_id):
+        """
+        Returns:
+        """
+        output_file = indiv_id + '_build_tree_posteriors.tsv'
+        trees_df['edges'] = trees_df['edges'].apply(self.reformat_edges_for_output)
+        trees_df.to_csv(output_file, sep='\t', index=False)
+
+    @staticmethod
+    def write_all_cell_abundances(all_cell_abundances, indiv_id):
+        header = ['Patient_ID', 'Sample_ID', 'Iteration', 'Cluster_ID', 'Abundance']
+        with open(indiv_id + '_cell_population_mcmc_trace.tsv', 'w') as writer:
+            writer.write('\t'.join(header) + '\n')
+            for sample_id, sample_mcmc_trace in all_cell_abundances.items():
+                for iteration, abundances in enumerate(sample_mcmc_trace):
+                    for cluster, amount in abundances.items():
+                        writer.write('\t'.join([indiv_id, sample_id, str(iteration), str(cluster), str(amount)]) + '\n')
 
     @staticmethod
     def write_cell_abundances_tsv(cell_abundances, cells_ancestry, indiv_id):
