@@ -81,11 +81,11 @@ The GrowthKinetics module fully incorporates the BuildTree libraries, so when ra
 
 Just BuildTree
 
-	./PhylogicNDT.py BuildTree -i Indiv_ID  -m mutation_ccf_file -c cluster_ccf_file 
+	./PhylogicNDT.py BuildTree -i Indiv_ID -sif Patient.sif  -m mutation_ccf_file -c cluster_ccf_file 
 
 GrowthKinetics
 
-	./PhylogicNDT.py GrowthKinetics -i Indiv_ID  -m mutation_ccf_file -c cluster_ccf_file -w 10 10 10 10 10 -t 1 2 3 4 5 
+	./PhylogicNDT.py GrowthKinetics -i Indiv_ID -sif Patient.sif  -m mutation_ccf_file -c cluster_ccf_file -w 10 10 10 10 10 -t 1 2 3 4 5 
 
 Run Cluster together with BuildTree
 
