@@ -1,7 +1,7 @@
 from bitnami/minideb
 RUN install_packages python-pip build-essential python-dev r-base r-base-dev git graphviz python-tk
 RUN pip install setuptools wheel
-RUN pip install numpy scipy matplotlib
+RUN pip install numpy scipy matplotlib pandas numba
 COPY req /tmp/req
 RUN apt-get -y upgrade
 RUN apt-get -y update
