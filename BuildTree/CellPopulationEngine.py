@@ -2,16 +2,17 @@ from scipy import stats
 from random import shuffle
 import collections
 import numpy as np
+import numba as nb
 import itertools
 import operator
 import logging
-from scipy.special import logsumexp as logsumexp_scipy
 
 
 class CellPopulationEngine:
 
     def __init__(self, patient):
         self._patient = patient
+        self._all_configurations = {}
         if patient.ClusteringResults:
             self._clustering_results = patient.ClusteringResults
         else:
@@ -25,6 +26,10 @@ class CellPopulationEngine:
     def get_random_cluster(self):
         return np.random.choice(self._clusters)
 
+    @property
+    def mcmc_trace(self):
+        return self._all_configurations
+
     @staticmethod
     def sample_ccf(xk, pk):
         """ """
@@ -35,14 +40,19 @@ class CellPopulationEngine:
             return custm.rvs(size=1)[0]
 
     @staticmethod
-    def _normalize_in_logspace(dist, in_log_space=True):
-        logging.debug('Distribution before normalization\n{}'.format(dist))
+    @nb.njit()
+    def logSumExp(ns):
+        max_ = np.max(ns)
+        ds = ns - max_
+        sumOfExp = np.exp(ds).sum()
+        return max_ + np.log(sumOfExp)
+
+    def _normalize_in_logspace(self, dist, in_log_space=True):
         if in_log_space:
-            log_dist = np.array(dist, dtype=np.float64)
+            log_dist = np.array(dist, dtype=np.float32)
         else:
-            logging.debug('Converting distribution to log space before normalization')
-            log_dist = np.log(dist, dtype=np.float64)
-        return np.exp(log_dist - logsumexp_scipy(log_dist))
+            log_dist = np.log(dist, dtype=np.float32)
+        return np.exp(log_dist - self.logSumExp(log_dist))
 
     def _compute_cluster_constrained_density(self, node, cluster_density, iter_ccf):
         parent = node.parent
@@ -82,12 +92,12 @@ class CellPopulationEngine:
             logging.warn('Constrained ccf for node {} is None'.format(node.identifier))
             return 0.0
 
-    def _compute_sample_constrained_ccf(self, sample_clusters_ccf, tree_levels, n_iter=250):
+    def _compute_sample_constrained_ccf(self, sample_clusters_ccf, tree_levels, n_iter=250, burn_in=100):
         """ For each cluster computes constrained density and samples ccf from that density
-            :returns the most frequent ccf configuration for the sample across all iterations """
+            :returns the most frequent ccf guration for the sample across all iterations """
         hist = range(101)
-        all_configurations = []
-        for i in range(n_iter):
+        sample_mcmc_trace = []
+        for i in range(n_iter + burn_in):
             logging.debug('Iteration {}'.format(i))
             iter_ccf = dict.fromkeys(itertools.chain(self._top_tree.nodes.keys()), 0.0)
             # Traverse tree from root to it's leaves
@@ -100,11 +110,9 @@ class CellPopulationEngine:
                     cluster_sampled_ccf = self.sample_cluster_ccf(node, sample_clusters_ccf, iter_ccf, hist)
                     logging.debug('Cluster {} has constrained ccf {}'.format(node_id, cluster_sampled_ccf))
                     iter_ccf[node.data.identifier] = cluster_sampled_ccf
-                all_configurations.append(iter_ccf)
-        most_frequent_config, most_frequent_count = self._get_most_frequent_configuration(all_configurations)
-        logging.debug('Most frequent constrained ccf configuration with count {} \n{} '.format(most_frequent_count,
-                                                                                               most_frequent_config))
-        return most_frequent_config
+            if i >= burn_in:
+                sample_mcmc_trace.append(iter_ccf)
+        return sample_mcmc_trace
 
     def _get_sample_clusters_densities(self, sample_id):
         """ For each sample ID returns dictionary of clusters and their densities for this sample """
@@ -113,27 +121,43 @@ class CellPopulationEngine:
             sample_clusters_densities[cluster_id] = cluster.hist[sample_id]
         return sample_clusters_densities
 
-    def get_cell_abundance(self, constrained_ccf):
-        """ """
-        cell_abundances = {}
-        for sample_id, clusters_constrained_ccf in constrained_ccf.items():
-            sample_cell_abundance = {key: 0 for key, value in clusters_constrained_ccf}
-            for node_id, node_ccf in clusters_constrained_ccf:
-                node = self._top_tree.nodes[node_id]
-                parent = node.parent
-                if parent:
-                    logging.debug('Node {} has parent {} with abundance {}'.format(node_id, parent.identifier,
-                                                                                   sample_cell_abundance[
-                                                                                       parent.identifier]))
-                    sample_cell_abundance[parent.identifier] -= node_ccf
-                else:
-                    logging.debug('Node {} has no parent'.format(node_id))
-                sample_cell_abundance[node_id] += node_ccf
-            # check that cancer cell population in the sample sums up to 100%
-            assert sum([a for cl, a in sample_cell_abundance.items()]) <= 100.0
-            cell_abundances[sample_id] = sample_cell_abundance
+    def get_all_cell_abundances(self):
+        """ For each MCMC iteration computes cell abundances """
+        all_cell_abundances = {}
+        for sample_id, sample_constrained_ccf in self._all_configurations.items():
+            all_cell_abundances[sample_id] = []
+            for iteration, constrained_ccf in enumerate(sample_constrained_ccf):
+                all_cell_abundances[sample_id].append(self.get_cell_abundance(constrained_ccf))
+        return all_cell_abundances
+
+    def get_cell_abundance_across_samples(self, constrained_ccf):
+        """ For each sample computes cell abundances for each cluster """
+        cell_abundances_across_samples = {}
+        for sample_id, sample_constrained_ccf in constrained_ccf.items():
+            sample_cell_abundance = self.get_cell_abundance(sample_constrained_ccf)
+            cell_abundances_across_samples[sample_id] = sample_cell_abundance
             logging.debug('Cell abundance for sample {} \n {}'.format(sample_id, sample_cell_abundance))
-        return cell_abundances
+        return cell_abundances_across_samples
+
+    def get_cell_abundance(self, sample_constrained_ccfs):
+        """ Adjusts constrained ccf to represent cell population according to phylogenetic tree """
+        # Have to convert to dictionary, in case list of tuples is passed
+        sample_constrained_ccfs = dict(sample_constrained_ccfs)
+        sample_cell_abundance = {key: 0 for key, value in sample_constrained_ccfs.items()}
+        for node_id, node_ccf in sample_constrained_ccfs.items():
+            node = self._top_tree.nodes[node_id]
+            parent = node.parent
+            if parent:
+                logging.debug('Node {} has parent {} with abundance {}'.format(node_id, parent.identifier,
+                                                                               sample_cell_abundance[
+                                                                                   parent.identifier]))
+                sample_cell_abundance[parent.identifier] -= node_ccf
+            else:
+                logging.debug('Node {} has no parent'.format(node_id))
+            sample_cell_abundance[node_id] += node_ccf
+        # check that cancer cell population in the sample sums up to 100%
+        assert sum([a for cl, a in sample_cell_abundance.items()]) <= 100.0
+        return sample_cell_abundance
 
     @staticmethod
     def _get_most_frequent_configuration(constrained_ccfs_configs):
@@ -151,6 +175,11 @@ class CellPopulationEngine:
         samples_ccf = {}
         for idx, sample in enumerate(self._patient.sample_list):
             sample_clusters_density = self._get_sample_clusters_densities(idx)
-            samples_ccf[sample.sample_name] = self._compute_sample_constrained_ccf(sample_clusters_density, tree_levels,
-                                                                                   n_iter)
+            sample_mcmc_trace = self._compute_sample_constrained_ccf(sample_clusters_density, tree_levels, n_iter)
+            most_frequent_config, most_frequent_count = self._get_most_frequent_configuration(sample_mcmc_trace)
+            samples_ccf[sample.sample_name] = most_frequent_config
+            # For each sample record its MCMC trace
+            self._all_configurations[sample.sample_name] = sample_mcmc_trace
+            logging.debug('Most frequent constrained ccf configuration with count {} \n{} '.format(most_frequent_count,
+                                                                                                   most_frequent_config))
         return samples_ccf

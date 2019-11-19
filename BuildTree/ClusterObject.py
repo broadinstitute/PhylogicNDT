@@ -1,21 +1,13 @@
 import logging
 import numpy as np
-from scipy.special import logsumexp as logsumexp_scipy
-
-import pkgutil
-
-if pkgutil.find_loader('sselogsumexp') is not None:
-    logging.info("Using fast logsumexp")
-    from sselogsumexp import logsumexp
-else:
-    logging.info("Using scipy (slower) logsumexp")
-    from scipy.misc import logsumexp
+import numba as nb
 
 
 class Cluster:
 
-    def __init__(self, identifier, time_points, num_bins=101):
+    def __init__(self, identifier, time_points, num_bins=101, blacklist_threshold=0.1):
         self._identifier = identifier
+        self._blacklist_threshold = blacklist_threshold
         self._densities = {}
         # Dictionary of mutations with key: mutation.var_str and value: nd histogram in log space
         self._mutations = {}
@@ -65,6 +57,11 @@ class Cluster:
         """ Normalized density histogram (not log space) """
         return self._hist
 
+    def set_hist(self, new_hist):
+        """ Updates cluster density after BuildTree """
+        self._loghist = self._logprior
+        self._hist = np.apply_along_axis(np.exp, 1, self._loghist)
+
     @property
     def loghist(self):
         """ Log space normalized density histogram """
@@ -85,7 +82,6 @@ class Cluster:
         """ Number of mutations in the cluster """
         return len(self._mutations)
 
-    # (mut, mut_nd_hist, update_cluster_hist=False, create_mut_nd_hist=False)
     def add_mutation(self, mutation, mutation_nd_hist, update_cluster_hist=False, create_mut_nd_hist=False):
         """ Initially when mutations are added they shouldn't change cluster density
             When reshuffling mutations cluster density should be updated """
@@ -95,34 +91,45 @@ class Cluster:
                 mutation_nd_hist = self._make_nd_histogram(mutation_nd_hist)
             self._mutations[mutation] = mutation_nd_hist
             if update_cluster_hist:
-                self._update_hist(mutation_nd_hist, action='add')
+                self._update_density(mutation_nd_hist, action='add')
             logging.debug("Added mutation {} to cluster {}.".format(mutation.var_str, self._identifier))
         else:
             logging.error(
-                "Can not add mutation {} to cluster {}. It is already there.".format(mutation.var_str, self._identifier))
+                "Can not add mutation {} to cluster {}. It is already there.".format(mutation.var_str,
+                                                                                     self._identifier))
 
     def remove_mutation(self, mutation, update_cluster_hist=True):
-        """ """
+        """ Delete mutation from cluster and updates cluster distribution """
         self._iter_count_removed += 1
         if mutation in self._mutations:
             mutation_nd_hist = self._mutations[mutation]
             del self._mutations[mutation]
             if update_cluster_hist:
-                self._update_hist(mutation_nd_hist, action='sub')
+                self._update_density(mutation_nd_hist, action='sub')
             logging.debug("Removed mutation {} from cluster {}.".format(mutation.var_str, self._identifier))
         else:
             logging.error("Can not remove mutation {} from cluster {}. It is not there".format(mutation.var_str,
                                                                                                self._identifier))
 
     @staticmethod
-    def _make_nd_histogram(hist_array, conv=1e-40):
-        hist = np.asarray(hist_array, dtype=np.float32) + conv
-        return np.apply_along_axis(lambda z: z - logsumexp_scipy(z), 1, np.log(hist))
+    @nb.njit()
+    def logSumExp(ns):
+        max_ = np.max(ns)
+        ds = ns - max_
+        sumOfExp = np.exp(ds).sum()
+        return max_ + np.log(sumOfExp)
+
+    def _make_nd_histogram(self, hist_array, conv=1e-40):
+        hist = np.asarray(hist_array, dtype=np.float64) + conv
+        return self._normalize_in_log_space(hist)
 
     def _normalize_loghist_with_prior(self, loghist):
+        loghist = np.asarray(loghist, dtype=np.float64)
+        return self._normalize_in_log_space(loghist + self._logprior)
+
+    def _normalize_in_log_space(self, hist):
         """ Normalize in each dimension in log space """
-        loghist = np.asarray(loghist, dtype=np.float32)
-        return np.apply_along_axis(lambda x: x - logsumexp(x), 1, loghist + self._logprior)
+        return np.apply_along_axis(lambda x: x - self.logSumExp(x), 1, hist)
 
     def _add_mutation(self, mut_hist):
         """ Update cluster density after adding mutation to it """
@@ -134,7 +141,7 @@ class Cluster:
         # TODO: what if it is the last mutation in cluster
         self._loghist = self._loghist - mut_hist
 
-    def _update_hist(self, mut_hist, action='add'):
+    def _update_density(self, mut_hist, action='add'):
         """ Updating density distribution after adding or removing a mutation to/from cluster """
         if action == 'add':
             self._add_mutation(mut_hist)
@@ -151,23 +158,27 @@ class Cluster:
 
     def add_sample_density(self, sample_id, density, conv=1e-40):
         sample_idx = self._time_points.index(sample_id)
-        density = np.asarray(density, dtype=np.float32) + conv
-        log_density = np.log(density, dtype=np.float32)
+        density = np.asarray(density, dtype=np.float64) + conv
+        log_density = np.log(density, dtype=np.float64)
         self._hist[sample_idx] = density
-        self._logprior[sample_idx] = log_density - logsumexp_scipy(log_density)
-        self._loghist[sample_idx] = log_density - logsumexp_scipy(log_density)
+        normalized_in_log_space = log_density - self.logSumExp(log_density)
+        self._logprior[sample_idx] = normalized_in_log_space
+        self._loghist[sample_idx] = normalized_in_log_space
         logging.debug('Added density for cluster {} for sample {}'.format(self._identifier, sample_id))
 
     def cluster_means(self):
         grid_size = self._hist.shape[1]
         return np.sum(self._hist * np.arange(grid_size) / (grid_size - 1), axis=1)
 
-    def _low_ccf_check(self, threshold):
-        return all([ccf_mean < threshold for ccf_mean in self.cluster_means()])
+    def _low_ccf_check(self):
+        return all([ccf_mean <= self._blacklist_threshold for ccf_mean in self.cluster_means()])
 
-    def set_blacklist_status(self, threshold=0.1):
+    def set_blacklist_status(self, check_ccf=True):
         """ Checks if ccf mean across all samples is below a threshold, blacklist cluster """
-        if self._low_ccf_check(threshold):
-            self._blacklisted = True
+        if check_ccf:
+            if self._low_ccf_check():
+                self._blacklisted = True
+            else:
+                self._blacklisted = False
         else:
-            self._blacklisted = False
+            self._blacklisted = True

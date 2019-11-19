@@ -1,9 +1,16 @@
 import logging
 import numpy as np
+import numba as nb
 import itertools
 import functools
-from scipy.special import logsumexp as logsumexp_scipy
-from .Node import Node
+
+if __package__ is None:
+    import sys
+    from os import path
+    sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
+    from Node import Node
+else:
+    from .Node import Node
 
 
 CLONAL_CLUSTER = 1
@@ -13,11 +20,17 @@ class Tree:
 
     def __init__(self, nodes=None, edges=None, root=None):
         # dictionary of node id: node instance
-        self._nodes = nodes if nodes else {}
+        self._nodes = {}
+        if nodes:
+            self.add_nodes(nodes)
         # list of tuples (parent_id, child_id)
-        self._edges = edges if edges else []
+        self._edges = []
+        if edges:
+            self.add_edges(edges)
         # pointer to the root of the tree
-        self._root = root
+        self._root = None
+        if root:
+            self.set_root(root)
 
     def init_tree_from_clustering(self, clustering_results):
         """ Initialize Tree object with clustering results """
@@ -34,39 +47,35 @@ class Tree:
         logging.debug('Tree initialized with edges {}'.format(self.edges))
 
     def __repr__(self):
-        '''
-        Represent tree
-        Returns:
-
-        '''
+        """
+        Tree object representation
+        """
         return repr(self._edges), [repr(node) for identifier, node in self._nodes.items()]
 
     def add_edge(self, parent, child):
-        """ Adds edge to the tree (tuple of node's identifiers).
-            Creates new nodes if any missing """
-        missing_nodes = [node for node in [parent, child] if node.identifier not in self._nodes]
-
-        self.add_nodes(missing_nodes)
-        self._edges.append((parent.identifier, child.identifier))
-        # add child for parent node
-        parent.add_child(child.identifier)
-        # set parent for child node
-        child.set_parent(parent)
+        """
+        Adds edge to the tree (tuple of node's identifiers).
+        Creates new nodes if any missing
+        """
+        if parent:
+            missing_nodes = [node for node in [parent, child] if node.identifier not in self._nodes]
+            self.add_nodes(missing_nodes)
+            self._edges.append((parent.identifier, child.identifier))
+            # add child for parent node
+            parent.add_child(child.identifier)
+            # set parent for child node
+            child.set_parent(parent)
+        else:
+            self._edges.append((None, child.identifier))
 
     def add_edges(self, edges):
         for (parent_id, child_id) in edges:
-            self.add_edge(self._nodes[parent_id], self._nodes[child_id])
+            if parent_id and child_id:
+                self.add_edge(self._nodes[parent_id], self._nodes[child_id])
 
     def remove_edge(self, parent, child):
-        '''
-
-        Args:
-            parent:
-            child:
-
-        Returns:
-
-        '''
+        """
+        """
         # verify that nodes exist in the tree
         if parent.identifier in self._nodes and child.identifier in self._nodes:
             # verify that edge exists
@@ -89,7 +98,7 @@ class Tree:
 
     def add_node(self, identifier, data=None, parent=None, children=None, root=False):
         node = Node(identifier, data, children, parent)
-        if identifier not in self._nodes:
+        if identifier and identifier not in self._nodes:
             self._nodes[identifier] = node
         else:
             logging.error('Node with this %s exists in the tree' % str(identifier))
@@ -113,20 +122,25 @@ class Tree:
         return self._nodes
 
     def get_node_by_id(self, identifier):
-        return self._nodes[identifier]
+        if identifier in self._nodes:
+            return self._nodes[identifier]
+        else:
+            logging.debug('Node with id {} is not in the list of nodes'.format(identifier))
+            return None
 
     def size(self):
         return len(self._nodes)
 
     def get_random_node(self):
-        '''
-        Returns:
-        '''
+        """
+        :returns any node in the Tree except Clonal
+        """
         # avoid picking clonal cluster (1)
         nodes_to_choose = [n for n in self._nodes.keys() if n != self._root.identifier]
         return self._nodes[np.random.choice(nodes_to_choose)]
 
     def add_nodes(self, nodes):
+        """ Given a list of Node objects adds them to tree self._nodes dictionary """
         for node in nodes:
             self._nodes[node.identifier] = node
 
@@ -137,21 +151,6 @@ class Tree:
     def remove_node(self, node):
         # don't think nodes should be removed from the tree
         raise NotImplementedError
-
-    def get_tree_levels(self):
-        level = 0
-        children = self._root.children
-        tree_levels = {}
-        tree_levels[level] = [self._root.identifier]
-        while len(children) > 0:
-            level += 1
-            tree_levels[level] = children
-            curr_children = list()
-            for child_id in children:
-                curr_children += self._nodes[child_id].children
-            children = curr_children
-        logging.debug('Tree levels \n{}'.format(str(tree_levels)))
-        return tree_levels
 
     def traverse_by_branch(self, node=None):
         if node is None:
@@ -231,12 +230,12 @@ class Tree:
                 self.add_edge(node_to_move, child)
 
     def remove_edges_for_node(self, node_to_move):
-        '''
+        """
         Removing edges that connect node_to_move to any other node in the Tree
         (its parent and children)
         :param node_to_move:
         :return:
-        '''
+        """
         node_to_move_parent = node_to_move.parent
         logging.debug('Node to move parent {}'.format(node_to_move.parent.identifier))
         # For every child of this node_to_move
@@ -254,13 +253,9 @@ class Tree:
 
     @staticmethod
     def get_possible_configurations(potential_children):
-        """
-
-        :param potential_children:
-        :return:
-        """
+        """ Find all possible children configurations with the list of possible children """
         new_children = []
-        # Can only "borrow" up to 3 children of it's potential parent
+        # Can only "borrow" up to 4 children of it's potential parent
         for n_nodes in range(1, min(len(potential_children) + 1, 4)):
             configuration = list(itertools.combinations(potential_children, n_nodes))
             new_children.extend(configuration)
@@ -268,25 +263,22 @@ class Tree:
         return new_children
 
     @staticmethod
-    def normalize_in_logspace(dist, in_log_space=True):
-        # logging.debug('Likelihood before normalization\n{}'.format(dist))
+    @nb.njit()
+    def logSumExp(ns):
+        max_ = np.max(ns)
+        ds = ns - max_
+        sumOfExp = np.exp(ds).sum()
+        return max_ + np.log(sumOfExp)
+
+    def normalize_in_logspace(self, dist, in_log_space=True):
         if in_log_space:
             log_dist = np.array(dist, dtype=np.float64)
         else:
             log_dist = np.log(dist, dtype=np.float64)
-        return np.exp(log_dist - logsumexp_scipy(log_dist))
+        return np.exp(log_dist - self.logSumExp(log_dist))
 
-    """
     @staticmethod
-    def diff_ccf(ccf1, ccf2, difference=True):
-        # reduce(np.convolve, [self.clusters[x][s_idx] for x in siblings])
-        if difference:
-            return np.convolve(ccf1, ccf2[::-1])
-        else:
-            return np.convolve(ccf1, ccf2)
-    """
-
-    def diff_ccf(self, ccf1, ccf2, difference=True):
+    def diff_ccf(ccf1, ccf2):
         # Histogram of CCF1-CCF2
         ccf_dist1 = np.append(ccf1, [0] * len(ccf1))
         ccf_dist2 = np.append(ccf2, [0] * len(ccf1))
@@ -345,6 +337,7 @@ class Tree:
         # Clear out children's lists, children will be added in add_edge function
         for node_id, node in self._nodes.items():
             node.remove_all_children()
+        # Clear out pointer to parent for each Node
         for node_id, node in self._nodes.items():
             node.remove_parent()
         # Add new edges
@@ -353,10 +346,22 @@ class Tree:
 
     def get_ancestry(self, node_id):
         node = self._nodes[node_id]
-        ancestry = [node_id]
         current_parent = node.parent
         while current_parent:
-            ancestry.append(current_parent.identifier)
+            yield current_parent.identifier
             current_parent = current_parent.parent
-        logging.debug('Ancestory for node {} is {}'.format(node_id, ancestry[::-1]))
-        return ancestry[::-1]
+
+    def get_tree_levels(self):
+        level = 0
+        children = self._root.children
+        tree_levels = {}
+        tree_levels[level] = [self._root.identifier]
+        while len(children) > 0:
+            level += 1
+            tree_levels[level] = children
+            curr_children = list()
+            for child_id in children:
+                curr_children += self._nodes[child_id].children
+            children = curr_children
+        logging.debug('Tree levels \n{}'.format(str(tree_levels)))
+        return tree_levels

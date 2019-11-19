@@ -1,13 +1,19 @@
 import numpy as np
+import numba as nb
 import random
 import logging
-from emd import emd
 
-from scipy.misc import logsumexp as logsumexp_scipy
+
+@nb.njit()
+def logSumExp(ns):
+    max_ = np.max(ns)
+    ds = ns - max_
+    sumOfExp = np.exp(ds).sum()
+    return max_ + np.log(sumOfExp)
 
 
 def logsum_of_marginals_per_sample(loghist):
-    return np.apply_along_axis(lambda x: logsumexp_scipy(x), 1, np.array(loghist, dtype=np.float32))
+    return np.apply_along_axis(lambda x: logSumExp(x), 1, np.array(loghist, dtype=np.float64))
 
 
 def shuffling(clustering_results, sample_list):
@@ -36,8 +42,7 @@ def shuffling(clustering_results, sample_list):
                 loglik[cluster_idx - 1] = logsum_of_marginals_per_sample(cluster_loghist + mut_nd_hist)
 
         loglik = np.sum(loglik, axis=1)
-        loglik = loglik - logsumexp_scipy(loglik)
-        c_lik = np.exp(loglik - logsumexp_scipy(loglik))
+        c_lik = np.exp(loglik - logSumExp(loglik))
         new_cluster_idx = np.nonzero(np.random.multinomial(1, c_lik) == 1)[0][0] + 1
         logging.debug('Mutation {} old cluster assignment {}, new cluster assignment {}'.format(mut.var_str,
                                                                                                 mut.cluster_assignment,
@@ -59,17 +64,20 @@ def shuffling(clustering_results, sample_list):
                                                                           cluster._iter_count_removed))
 
 
+"""
 def emd_nd(u, v):
-    """
-    Computes Earth Mover's Distance in N-dimensions
-    Uses https://github.com/garydoranjr/pyemd
-    Need to convert probability distribution in non-log space
-    """
+    
+    #Computes Earth Mover's Distance in N-dimensions
+    #Uses https://github.com/garydoranjr/pyemd
+    #Need to convert probability distribution in non-log space
+    
+    # TODO: remove this dependency
+    from emd import emd
     return emd(np.exp(u), np.exp(v))
 
 
 def fix_cluster_lables(clustering_results):
-    """ Gathers probability distributions for all clusters  """
+    # Gathers probability distributions for all clusters
     n_clusters = len(clustering_results)
     cluster_densities = []
     orig_dens_tp = []
@@ -82,8 +90,8 @@ def fix_cluster_lables(clustering_results):
 
 
 def get_labels_mapping(cluster_densities, orig_dens_tp, n_clusters):
-    """ For all pairwise combinations of clusters computes distance between
-        between cluster prior and after mutation shuffling distributions """
+    # For all pairwise combinations of clusters computes distance between
+    #    between cluster prior and after mutation shuffling distributions 
     dist = []
     for c_n_o, cluster_old in enumerate(orig_dens_tp):
         if c_n_o == 0:
@@ -108,3 +116,5 @@ def get_labels_mapping(cluster_densities, orig_dens_tp, n_clusters):
     for c_n_o in range(n_clusters):
         new_densities.append(cluster_densities[mapping[c_n_o]])
     return mapping
+    
+"""
