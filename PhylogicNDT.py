@@ -11,7 +11,16 @@ import sys
 
 sys.path.append(os.path.dirname(os.path.realpath(__file__)) + "/")
 
-logging.getLogger().setLevel(logging.INFO)
+# Remove all handlers associated with the root logger object.
+for handler in logging.root.handlers[:]:
+    logging.root.removeHandler(handler)
+filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'phylogicndt.log')
+print(filename)
+logging.basicConfig(filename=filename,
+                    filemode='w',
+                    format='%(asctime)s - %(levelname)s - %(message)s',
+                    datefmt='%d-%b-%y %H:%M:%S',
+                    level=getattr(logging, "INFO"))
 
 import Cluster.Cluster  # Cluster Tool
 import PhylogicSim.Simulations
@@ -79,6 +88,13 @@ def build_parser():
                              action='store',
                              dest='tumor_size',
                              default=None)
+
+    base_parser.add_argument('--blacklist_threshold', '-bt',
+                             type=float,
+                             action='store',
+                             dest='blacklist_threshold',
+                             default=0.1,
+                             help='ccf threshold for blacklisting clusters for a BuildTree and Cell Population')
 
     # different Tools of the PhylogicNDT Package
     subparsers = parser.add_subparsers(title="tool", description="Choose a tool to run", help='Try the Cluster tool')
@@ -227,6 +243,13 @@ def build_parser():
                            dest='n_iter',
                            default=250,
                            help='number iterations')
+    # Specifying cluster ids to blacklist from BuildTree and CellPopulation
+    buildtree.add_argument("-bc", "--blacklist_cluster",
+                            dest='blacklist_cluster',
+                            action='append',
+                            type=str,
+                            help="List cluster ids to blacklist from BuildTree and CellPopulation")
+
     buildtree.set_defaults(func=BuildTree.BuildTree.run_tool)
 
     # CellPopulation  Tool

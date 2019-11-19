@@ -26,7 +26,10 @@ class Node:
         return hash(str(self._identifier))
 
     def __repr__(self):
-        return self._identifier, [(sample_id + str(density)) for sample_id, density in self._data.iteritems()]
+        if self._data:
+            return self._identifier, [(sample_id + str(density)) for sample_id, density in self._data.iteritems()]
+        else:
+            return str(self._identifier) + ''
 
     def add_child(self, child_id):
         """ """

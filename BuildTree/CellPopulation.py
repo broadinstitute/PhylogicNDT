@@ -1,22 +1,20 @@
 import logging
-import data.Patient as Patient
-from .Tree import Tree
-from .ClusterObject import Cluster
-from .CellPopulationEngine import CellPopulationEngine
-from .BuildTreeEngine import BuildTreeEngine
-
-
 # TODO: add mutation shuffling to CellPopulation module
+
 
 # Main run method
 def run_tool(args):
     logging.debug('Arguments {}'.format(args))
 
+    import data.Patient as Patient
+    from .Tree import Tree
+    from .CellPopulationEngine import CellPopulationEngine
+    from .BuildTreeEngine import BuildTreeEngine
+
     # init a Patient
     patient_data = Patient.Patient(indiv_name=args.indiv_id, driver_genes_file=args.driver_genes_file)
     # try:  # if sif file is specified
     # Patient load cluster and mut ccf files
-
     parse_sif_file(args.sif, args.mutation_ccf_file, patient_data)
     load_clustering_results(args.cluster_ccf_file, patient_data)
     tree_edges = load_tree_edges_file(args.tree_tsv)
@@ -28,14 +26,14 @@ def run_tool(args):
     # Computing Cell Population
     cp_engine = CellPopulationEngine(patient_data)
     constrained_ccf = cp_engine.compute_constrained_ccf()
-    # print constrained_ccf
 
     cell_ancestry = bt_engine.get_cell_ancestry()
     cell_abundance = cp_engine.get_cell_abundance(constrained_ccf)
     # Output and visualization
     import output.PhylogicOutput
     phylogicoutput = output.PhylogicOutput.PhylogicOutput()
-
+    # TODO write cell population MCMC trace to file
+    phylogicoutput.write_all_cell_abundances(cp_engine.get_all_cell_abundances(), args.indiv_id)
     phylogicoutput.write_constrained_ccf_tsv(constrained_ccf, cell_ancestry, args.indiv_id)
     phylogicoutput.write_cell_abundances_tsv(cell_abundance, cell_ancestry, args.indiv_id)
     phylogicoutput.generate_html_from_tree(args.mutation_ccf_file, args.cluster_ccf_file,
@@ -46,11 +44,6 @@ def run_tool(args):
                                            treatment_file=args.treatment_data,
                                            tumor_sizes_file=args.tumor_size,
                                            cnv_file=args.indiv_id + '.cnvs.txt')
-
-    # except Exception, e:
-    #    print str(e)
-    # except:
-    #    logging.error("Please provide sif file")
 
 
 def load_tree_edges_file(tree_tsv):
@@ -85,6 +78,7 @@ def parse_sif_file(sif_file, mutation_ccf_file, patient_data):
 
 
 def load_clustering_results(cluster_info_file, patient_data):
+    from .ClusterObject import Cluster
     clustering_results = {}
     ccf_headers = ['postDP_ccf_' + str(i / 100.0) for i in range(0, 101, 1)]
     sample_names = [sample.sample_name for sample in patient_data.sample_list]

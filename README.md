@@ -17,15 +17,18 @@ For debian:
 Install setuptools and wheel
 
 	pip install setuptools wheel
-Install numpy, scipy, matplotlib, and pandas (these versions are recommended) 
+	
+Install required packages 
 
-	pip numpy==1.13.3 pandas==0.19.2 scipy==1.0.0 matplotlib==2.0.0
+	pip install -r req
+	
+Install scipy, matplotlib, and pandas (these versions are recommended) 
+
+	pip install pandas==0.19.2 scipy==1.0.0 matplotlib==2.0.0
 	pip install -e git+https://github.com/rmcgibbo/logsumexp.git#egg=sselogsumexp (for faster compute)
 
 
-Install remaining packages 
 
-	pip install -f req
 
 ### Docker Install
 Install docker from https://www.docker.com/community-edition#/download
