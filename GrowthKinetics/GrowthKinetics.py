@@ -1,25 +1,21 @@
 import sys
 import logging
-from BuildTree.ClusterObject import Cluster
-from BuildTree.Tree import Tree
-import data.Patient as Patient
-from .GrowthKineticsEngine import GrowthKineticsEngine
 
-from BuildTree.BuildTreeEngine import BuildTreeEngine
 
-sys.path.append('../')
-
-logging.basicConfig(filename='growth_kinetics.log',
-                    filemode='w',
-                    format='%(asctime)s - %(levelname)s - %(message)s',
-                    datefmt='%d-%b-%y %H:%M:%S',
-                    level=getattr(logging, "DEBUG"))
+# sys.path.append('../')
 
 
 # Main run method
 
 def run_tool(args):
     logging.debug('Arguments {}'.format(args))
+
+    from BuildTree.ClusterObject import Cluster
+    from BuildTree.Tree import Tree
+    import data.Patient as Patient
+    from .GrowthKineticsEngine import GrowthKineticsEngine
+
+    from BuildTree.BuildTreeEngine import BuildTreeEngine
 
     # init a Patient
     patient_data = Patient.Patient(indiv_name=args.indiv_id, driver_genes_file=args.driver_genes_file)
@@ -119,6 +115,6 @@ def load_clustering_results(cluster_info_file, patient_data):
                 mutations_nd_hist[mutation.var_str] = []
             mutations_nd_hist[(mutation.var_str, cluster_id)].append(mutation.ccf_1d)
     for (mut_var_str, cluster_id), mutation_nd_hist in mutations_nd_hist.items():
-        print mutation_nd_hist
+        print(mutation_nd_hist)
         clustering_results[cluster_id].add_mutation(mut_var_str, mutation_nd_hist)
     patient_data.ClusteringResults = clustering_results

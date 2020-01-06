@@ -2,7 +2,9 @@
 # Patient - central class to handle and store sample CCF data
 ##########################################################
 from Sample import TumorSample
+from Sample import RNASample
 from SomaticEvents import SomMutation, CopyNumberEvent
+from Enums import CSIZE, CENT_LOOKUP
 import os
 import sys
 import logging
@@ -53,8 +55,11 @@ class Patient:
         self.indiv_name = indiv_name
         # :type : list [TumorSample]
         self.sample_list = []
+        self.rna_sample_list = []
 
         self.samples_synchronized = False
+        self.rna_samples_synchronized = False
+        self.concordant_genes = []
         self.driver_genes = self._parse_driver_g_file(driver_genes_file)
         self.ccf_grid_size = ccf_grid_size
 
@@ -94,6 +99,33 @@ class Patient:
     def initPatient(self):
         """ accepted input types abs; txt; sqlite3 .db # auto tab if .txt, .tsv or .tab ; abs if .Rdata; sqlite if .db """
         raise NotImplementedError
+
+    def addRNAsample(self, filen, sample_name, input_type='auto', purity=None, timepoint=None):
+        """ Accepted input types rsem.genes """
+        # make new sample and add to exiting list of samples
+        logging.info("Adding expression from RNA Sample: %s", sample_name)
+        new_rna_sample = RNASample(filen, input_type, indiv=self.indiv_name, sample_name=sample_name,
+                                   timepoint=timepoint, purity=purity)
+        self.rna_sample_list.append(new_rna_sample)
+        logging.info('Added RNA sample ' + new_rna_sample.sample_name)
+        # turn of concordance flag when new sample is added
+        self.rna_samples_synchronized = False
+
+    def preprocess_rna_samples(self):
+
+        count_low_exp_genes = 0
+        gene_ids = self.rna_sample_list[0].get_gene_ids()
+        for gene_id in gene_ids:
+            tpm_values = []
+            for sample in self.rna_sample_list:
+                tpm_values.append(sample.get_tpm_by_gene_id(gene_id))
+            if all(i <= 1.0 for i in tpm_values):
+                count_low_exp_genes += 1
+            else:
+                self.concordant_genes.append(gene_id)
+        self.rna_samples_synchronized = True
+        logging.debug('{} genes have TPM values less a than 1.0 across all timepoints.'.format(count_low_exp_genes))
+        logging.debug('{} genes will be used in the analysis.'.format(len(self.concordant_genes)))
 
     def addSample(self, filen, sample_name, input_type='auto', grid_size=101, seg_file=None, _additional_muts=None,
                   purity=None, timepoint_value=None):
@@ -308,7 +340,7 @@ class Patient:
                     break
                 for ii, cluster_ccfs in enumerate(clust_CCF_results):
                     cluster_ccf = cluster_ccfs[i]
-                    if abs(np.argmax(mut.ccf_1d) - np.argmax(cluster_ccf)) > 50:
+                    if abs(np.argmax(mut.ccf_1d) - np.argmax(cluster_ccf)) > 70:
                         dot = 0.
                     else:
                         dot = max(sum(np.array(mut.ccf_1d) * cluster_ccf), .0001)
@@ -319,7 +351,8 @@ class Patient:
                     mut = sample.get_mut_by_varstr(mut.var_str)
                     mut.cluster_assignment = cluster_assignment
                     mut.clust_ccf = clust_CCF_results[cluster_assignment - 1][i]
-            elif not np.any(np.isnan(mut_coincidence)):
+            else:
+                print('Did not cluster ' + str(mut))
                 self.unclustered_muts.append(mut)
 
     def intersect_cn_trees(self):
@@ -377,8 +410,7 @@ class Patient:
                     ccf_low += np.array(seg[4])
                 yield (bands, cns, ccf_hat / len(R), ccf_high / len(R), ccf_low / len(R))
             else:
-                pivot = (event_segs - neighbors[p] for p in event_segs | X)
-                for s in min(pivot, key=len):
+                for s in event_segs:
                     if isadjacent(s, R):
                         for region in merge_cn_events(event_segs & neighbors[s], neighbors, R=R | {s}, X=X & neighbors[s]):
                             yield region
@@ -473,7 +505,109 @@ class Patient:
                         ccf_low, a1, dupe=not a1)
         self.concordant_cn_tree = c_trees
 
-    def _add_cn_event_to_samples(self, chrom, start, end, cns, mut_category, ccf_hat, ccf_high, ccf_low, a1, dupe=False):
+    def get_arm_level_cn_events(self):
+        n_samples = len(self.sample_list)
+        for ckey, (chrom, csize) in enumerate(zip(list(map(str, range(1, 23))) + ['X', 'Y'], CSIZE)):
+            centromere = CENT_LOOKUP[ckey + 1]
+            tree = IntervalTree()
+            for sample in self.sample_list:
+                if sample.CnProfile:
+                    tree.update(sample.CnProfile[chrom])
+            tree.split_overlaps()
+            tree.merge_equals(data_initializer=[], data_reducer=lambda a, c: a + [c])
+            c_tree = IntervalTree(filter(lambda s: len(s.data) == n_samples, tree))
+            event_segs = set()
+            for seg in c_tree:
+                start = seg.begin
+                end = seg.end
+                cns_a1 = []
+                cns_a2 = []
+                ccf_hat_a1 = []
+                ccf_hat_a2 = []
+                ccf_high_a1 = []
+                ccf_high_a2 = []
+                ccf_low_a1 = []
+                ccf_low_a2 = []
+                for i, sample in enumerate(self.sample_list):
+                    seg_data = seg.data[i][1]
+                    cns_a1.append(seg_data['cn_a1'])
+                    cns_a2.append(seg_data['cn_a2'])
+                    ccf_hat_a1.append(seg_data['ccf_hat_a1'] if seg_data['cn_a1'] != 1 else 0.)
+                    ccf_hat_a2.append(seg_data['ccf_hat_a2'] if seg_data['cn_a2'] != 1 else 0.)
+                    ccf_high_a1.append(seg_data['ccf_high_a1'] if seg_data['cn_a1'] != 1 else 0.)
+                    ccf_high_a2.append(seg_data['ccf_high_a2'] if seg_data['cn_a2'] != 1 else 0.)
+                    ccf_low_a1.append(seg_data['ccf_low_a1'] if seg_data['cn_a1'] != 1 else 0.)
+                    ccf_low_a2.append(seg_data['ccf_low_a2'] if seg_data['cn_a2'] != 1 else 0.)
+                cns_a1 = np.array(cns_a1)
+                cns_a2 = np.array(cns_a2)
+                if np.all(cns_a1 == 1):
+                    pass
+                elif np.all(cns_a1 >= 1) or np.all(cns_a1 <= 1):
+                    if start < centromere < end:
+                        event_segs.add((start, centromere, 'p', tuple(cns_a1), tuple(ccf_hat_a1), tuple(ccf_high_a1), tuple(ccf_low_a1), 'a1'))
+                        event_segs.add((centromere, end, 'q', tuple(cns_a1), tuple(ccf_hat_a1), tuple(ccf_high_a1), tuple(ccf_low_a1), 'a1'))
+                    elif end < centromere:
+                        event_segs.add((start, end, 'p', tuple(cns_a1), tuple(ccf_hat_a1), tuple(ccf_high_a1), tuple(ccf_low_a1), 'a1'))
+                    else:
+                        event_segs.add((start, end, 'q', tuple(cns_a1), tuple(ccf_hat_a1), tuple(ccf_high_a1), tuple(ccf_low_a1), 'a1'))
+                else:
+                    logging.warning('Seg with inconsistent event: {}:{}:{}'.format(chrom, seg.begin, seg.end))
+                if np.all(cns_a2 == 1):
+                    pass
+                elif np.all(cns_a2 >= 1) or np.all(cns_a2 <= 1):
+                    if start < centromere < end:
+                        event_segs.add((start, centromere, 'p', tuple(cns_a2), tuple(ccf_hat_a2), tuple(ccf_high_a2), tuple(ccf_low_a2), 'a2'))
+                        event_segs.add((centromere, end, 'q', tuple(cns_a2), tuple(ccf_hat_a2), tuple(ccf_high_a2), tuple(ccf_low_a2), 'a2'))
+                    elif end < centromere:
+                        event_segs.add((start, end, 'p', tuple(cns_a2), tuple(ccf_hat_a2), tuple(ccf_high_a2), tuple(ccf_low_a2), 'a2'))
+                    else:
+                        event_segs.add((start, end, 'q', tuple(cns_a2), tuple(ccf_hat_a2), tuple(ccf_high_a2), tuple(ccf_low_a2), 'a2'))
+                else:
+                    logging.warning('Seg with inconsistent event: {}:{}:{}'.format(chrom, seg.begin, seg.end))
+            neighbors = {s: set() for s in event_segs}
+            for seg1, seg2 in itertools.combinations(event_segs, 2):
+                s1_hat = np.array(seg1[4])
+                s2_hat = np.array(seg2[4])
+                if seg1[2] == seg2[2] and seg1[3] == seg2[3] and all(s1_hat >= np.array(seg2[6])) and all(s1_hat <= np.array(seg2[5])) \
+                        and all(s2_hat >= np.array(seg1[6])) and all(s2_hat <= np.array(seg1[5])):
+                    neighbors[seg1].add(seg2)
+                    neighbors[seg2].add(seg1)
+
+            def _BK(P, neighbors, R=frozenset(), X=frozenset()):
+                if not P and not X:
+                    yield R
+                else:
+                    for v in P:
+                        for r in _BK(P & neighbors[v], neighbors, R=R | {v}, X=X & neighbors[v]):
+                            yield r
+                        P = P - {v}
+                        X = X | {v}
+
+            for clique in _BK(event_segs, neighbors):
+                if clique:
+                    clique_len = 0
+                    clique_ccf_hat = np.zeros(n_samples)
+                    clique_ccf_high = np.zeros(n_samples)
+                    clique_ccf_low = np.zeros(n_samples)
+                    n_segs = 0
+                    for seg in clique:
+                        clique_len += seg[1] - seg[0]
+                        clique_ccf_hat += np.array(seg[4])
+                        clique_ccf_high += np.array(seg[5])
+                        clique_ccf_low += np.array(seg[6])
+                        clique_arm = seg[2]
+                        cn_category = 'Arm_gain' if all(np.array(seg[3]) > 1) else 'Arm_loss'
+                        local_cn = seg[3]
+                        n_segs += 1
+                    clique_ccf_hat /= n_segs
+                    clique_ccf_high /= n_segs
+                    clique_ccf_low /= n_segs
+                    arm_len = centromere if clique_arm == 'p' else csize - centromere
+                    if clique_len > arm_len * .5:
+                        self._add_cn_event_to_samples(chrom, 0, 0, clique_arm, local_cn, cn_category, clique_ccf_hat, clique_ccf_high,
+                                                      clique_ccf_low)
+
+    def _add_cn_event_to_samples(self, chrom, start, end, arm, cns, cn_category, ccf_hat, ccf_high, ccf_low):
         """
         Adds CN event to sample in low_coverage_mutations attr and mut hashtable
 
@@ -483,8 +617,8 @@ class Patient:
             ccf_hat_i = ccf_hat[i] if local_cn != 1. else 0.
             ccf_high_i = ccf_high[i] if local_cn != 1. else 0.
             ccf_low_i = ccf_low[i] if local_cn != 1. else 0.
-            cn = CopyNumberEvent(chrom, start, end, ccf_hat=ccf_hat_i, ccf_high=ccf_high_i, ccf_low=ccf_low_i,
-                                 local_cn=local_cn, from_sample=sample, a1=a1, mut_category=mut_category, dupe=dupe)
+            cn = CopyNumberEvent(chrom, cn_category, start=start, end=end, ccf_hat=ccf_hat_i, ccf_high=ccf_high_i, ccf_low=ccf_low_i,
+                                 local_cn=local_cn, from_sample=sample, arm=arm)
             sample.low_coverage_mutations.update({cn.var_str: cn})
             sample.add_muts_to_hashtable(cn)
 
@@ -546,27 +680,26 @@ class NDHistogram:
         return {}
 
 
+_cytoband_dict = {}
+with open(os.path.dirname(__file__) + '/supplement_data/cytoBand.txt', 'r') as _f:
+    for _i, _line in enumerate(_f):
+        _row = _line.strip('\n').split('\t')
+        _cytoband_dict[(_row[0], _row[3])] = _i
+
 class Cytoband:
+    band_nums = _cytoband_dict
 
     def __init__(self, chrom, band):
-        self.chrom = chrom
+        self.chrom = chrom if chrom.startswith('chr') else 'chr' + chrom
         self.band = band
 
     def __sub__(self, other):
         if not isinstance(other, Cytoband):
             raise TypeError('Cannot subtract Cytoband with ' + str(type(other)))
         if self.chrom == other.chrom:
-            self_num = -1
-            other_num = -1
-            with open(os.path.dirname(__file__) + '/supplement_data/cytoBand.txt', 'r') as f:
-                for i, line in enumerate(f):
-                    row = line.strip('\n').split('\t')
-                    if row[0] == 'chr' + str(self.chrom) and row[3] == self.band:
-                        self_num = i
-                    if row[0] == 'chr' + str(other.chrom) and row[3] == other.band:
-                        other_num = i
-                    if self_num >= 0 and other_num >= 0:
-                        return self_num - other_num
+            self_num = self.band_nums[(self.chrom, self.band)]
+            other_num = self.band_nums[(other.chrom, other.band)]
+            return self_num - other_num
         raise ValueError('Cannot subtract cytobands on different chromosomes')
 
     def __lt__(self, other):

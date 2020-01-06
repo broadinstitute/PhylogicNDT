@@ -8,7 +8,7 @@ import logging
 import numpy as np
 
 # modules from this PhylogicNDT package
-import DpEngine
+from .DpEngine import DpEngine
 
 
 class ClusterEngine:
@@ -41,7 +41,7 @@ class ClusterEngine:
             PriorK = {'r': 10, 'mu': 10}  # standard values
 
         nd_hist = self.patient._make_ND_histogram()
-        clustering = DpEngine.DpEngine(nd_hist, N_iter, PriorK)
+        clustering = DpEngine(nd_hist, N_iter, PriorK)
         self.results = clustering.results
         self._ND_cluster_postprocess()  # Set cluster assignment, etc.
         self._ND_assign_setaside_mutations()

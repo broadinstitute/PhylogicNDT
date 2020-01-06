@@ -239,9 +239,9 @@ class CopyNumberEvent():
     alt_cnt = ''
     prot_change = ''
 
-    def __init__(self, chrN, start, end, ccf_1d=None, ccf_hat=None, ccf_high=None, ccf_low=None, std=None,
-                 from_sample=None, seg_tree=None, clust_ccf=None, local_cn=np.nan, a1=True, mut_category='None',
-                 dupe=False):
+    def __init__(self, chrN, cn_category, start=0, end=0, arm=None, ccf_1d=None, ccf_hat=None, ccf_high=None, ccf_low=None,
+                 std=None, from_sample=None, seg_tree=None, clust_ccf=None, local_cn=np.nan, a1=True,
+                dupe=False):
 
         # try:
         # Link to sample object.
@@ -251,10 +251,11 @@ class CopyNumberEvent():
         self.chrN = chrN
         self.start = start
         self.end = end
+        self.arm = arm
         if ccf_1d:
             self.ccf_1d = ccf_1d
         else:
-            std = std if std is not None else (ccf_high - ccf_low) / 4.
+            std = std if std is not None else max((ccf_high - ccf_low) / 4., .001)
             if ccf_hat <= std:
                 self.ccf_1d = np.insert(np.zeros(100), 0, 1.)
             elif ccf_hat >= 1. - std:
@@ -274,12 +275,24 @@ class CopyNumberEvent():
 
         self.type = 'CNV'
 
-        self._var_str = ':'.join(map(str, (mut_category, chrN, start.band, end.band, 'a1' if a1 else 'a2')))
-
-        self.event_name = mut_category + str(chrN) + start.band + '-' + end.band[1:] if start != end else mut_category \
-                                                                                                          + str(
-            chrN) + start.band
+        # self._var_str = ':'.join(map(str, (cn_category, chrN, start.band, end.band, 'a1' if a1 else 'a2')))
+        #
+        # self.event_name = cn_category + str(chrN) + start.band + '-' + end.band[1:] if start != end else mut_category \
+        #                                                                                                   + str(
+        #     chrN) + start.band
+        if cn_category.startswith('Arm'):
+            gl = cn_category.split('_')[1]
+            self.event_name = gl + '_' + str(self.chrN) + self.arm
+        elif cn_category.startswith('Focal'):
+            gl = cn_category.split('_')[1]
+            self.event_name = gl + '_' + str(chrN) + start.band + '-' + end.band[1:] if start != end else gl + str(chrN) + start.band
+        elif cn_category == 'WGD':
+            self.event_name = 'WGD'
+        else:
+            raise ValueError('Invalid cn category provided: "{}"'.format(cn_category))
         self.event_name += '_' if dupe else ''
+        self._var_str = self.event_name
+
         self.cluster_assignment = None
         if a1:
             self.local_cn_a1 = local_cn
@@ -288,7 +301,7 @@ class CopyNumberEvent():
             self.local_cn_a2 = local_cn
             self.local_cn_a1 = np.nan
         self.a1 = a1
-        self.mut_category = mut_category
+        self.cn_category = cn_category
         # self.set_mut_category(mut_category, arm=arm)
 
     def __hash__(self):
@@ -307,32 +320,32 @@ class CopyNumberEvent():
     def var_str(self):
         return self._var_str
 
-    def set_mut_category(self, mut_category, arm=None,
-                         cytoband=os.path.dirname(__file__) + '/supplement_data/cytoBand.txt'):
-        self.mut_category = mut_category
-        if mut_category == 'WGD':
-            self.gene = 'WGD'
-        elif mut_category == 'Arm_loss':
-            self.gene = 'loss_' + str(self.chrN) + arm
-        elif mut_category == 'Arm_gain':
-            self.gene = 'gain_' + str(self.chrN) + arm
-        elif mut_category.startswith('Focal'):
-            bands = []
-            with open(cytoband, 'r') as f:
-                for line in f:
-                    row = line.strip('\n').split('\t')
-                    if row[0].strip('chr') != str(self.chrN):
-                        continue
-                    if int(row[1]) < self.end and int(row[2]) > self.start:
-                        bands.append(row[3])
-                    if int(row[1]) > self.end:
-                        break
-            bands = sorted(bands)
-            section = bands[0] + '-' + bands[-1] if len(bands) > 1 else bands[0]
-            if mut_category.endswith('loss'):
-                self.gene = 'loss_' + str(self.chrN) + section
-            elif mut_category.endswith('gain'):
-                self.gene = 'gain_' + str(self.chrN) + section
+    # def set_mut_category(self, mut_category, arm=None,
+    #                      cytoband=os.path.dirname(__file__) + '/supplement_data/cytoBand.txt'):
+    #     self.mut_category = mut_category
+    #     if mut_category == 'WGD':
+    #         self.gene = 'WGD'
+    #     elif mut_category == 'Arm_loss':
+    #         self.gene = 'loss_' + str(self.chrN) + arm
+    #     elif mut_category == 'Arm_gain':
+    #         self.gene = 'gain_' + str(self.chrN) + arm
+    #     elif mut_category.startswith('Focal'):
+    #         bands = []
+    #         with open(cytoband, 'r') as f:
+    #             for line in f:
+    #                 row = line.strip('\n').split('\t')
+    #                 if row[0].strip('chr') != str(self.chrN):
+    #                     continue
+    #                 if int(row[1]) < self.end and int(row[2]) > self.start:
+    #                     bands.append(row[3])
+    #                 if int(row[1]) > self.end:
+    #                     break
+    #         bands = sorted(bands)
+    #         section = bands[0] + '-' + bands[-1] if len(bands) > 1 else bands[0]
+    #         if mut_category.endswith('loss'):
+    #             self.gene = 'loss_' + str(self.chrN) + section
+    #         elif mut_category.endswith('gain'):
+    #             self.gene = 'gain_' + str(self.chrN) + section
 
 
 class SomMutationND:

@@ -119,7 +119,6 @@ class TumorSample:
         # autodetect file type
         if input_type == 'auto':
             input_type = self._auto_file_type(filen)
-        print input_type
         if input_type == 'absolute':
             mut_with_ccf_dat = self._read_absolute_results(filen)
         elif input_type == 'tab':
@@ -380,7 +379,7 @@ class TumorSample:
         else:
             self._mut_varstring_hashtable[muts.var_str] = muts
 
-    def _resolve_CnEvents(self, seg_file, input_type='auto'):
+    def _resolve_CnEvents(self, seg_file, input_type='auto', purity=1, ploidy=2):
         if input_type == 'auto':
             if not seg_file:
                 input_type = 'none'
@@ -422,8 +421,74 @@ class TumorSample:
                                                                         'ccf_low_a2': ccf_low_a2})))
                     except ValueError:
                         continue
+        elif input_type == 'alleliccapseg':
+            with open(seg_file, 'r') as fh:
+                header = fh.readline().strip('\n').split('\t')
+                for line in fh:
+                    try:
+                        row = dict(zip(header, line.strip('\n').split('\t')))
+                        chrN = row['Chromosome']
+                        if chrN == '23':
+                            chrN = 'X'
+                        if chrN == '24':
+                            chrN = 'Y'
+                        start = int(row['Start.bp'])
+                        end = int(row['End.bp'])
+                        mu_minor = float(row['mu.minor'])
+                        sigma_minor = float(row['sigma.minor'])
+                        mu_major = float(row['mu.major'])
+                        sigma_major = float(row['sigma.major'])
+                        minor_cn_change = (mu_minor * ploidy / 2 - 1) / purity
+                        if -.1 < minor_cn_change < .1:
+                            local_cn_a1 = 1
+                            ccf_hat_a1 = 0
+                            ccf_high_a1 = 0
+                            ccf_low_a1 = 0
+                        elif minor_cn_change < 0:
+                            local_cn_a1 = 0
+                            ccf_hat_a1 = -minor_cn_change
+                            ccf_high_a1 = -((mu_minor - sigma_minor) * ploidy / 2 - 1) / purity
+                            ccf_low_a1 = -((mu_minor + sigma_minor) * ploidy / 2 - 1) / purity
+                        else:
+                            local_cn_a1 = 2
+                            ccf_hat_a1 = minor_cn_change / (local_cn_a1 - 1)
+                            while ccf_hat_a1 > .5 / local_cn_a1 + 1:
+                                local_cn_a1 += 1
+                                ccf_hat_a1 = minor_cn_change / (local_cn_a1 - 1)
+                            ccf_high_a1 = ((mu_minor + sigma_minor) * ploidy / 2 - 1) / local_cn_a1 / purity
+                            ccf_low_a1 = ((mu_minor - sigma_minor) * ploidy / 2 - 1) / local_cn_a1 / purity
+
+                        major_cn_change = (mu_major * ploidy / 2 - 1) / purity
+                        if -.1 < major_cn_change < .1:
+                            local_cn_a2 = 1
+                            ccf_hat_a2 = 0
+                            ccf_high_a2 = 0
+                            ccf_low_a2 = 0
+                        elif major_cn_change < 0:
+                            local_cn_a2 = 0
+                            ccf_hat_a2 = -major_cn_change
+                            ccf_high_a2 = -((mu_major - sigma_major) * ploidy / 2 - 1) / purity
+                            ccf_low_a2 = -((mu_major + sigma_major) * ploidy / 2 - 1) / purity
+                        else:
+                            local_cn_a2 = 2
+                            ccf_hat_a2 = major_cn_change / (local_cn_a2 - 1)
+                            while ccf_hat_a2 > .5 / local_cn_a2 + 1:
+                                local_cn_a2 += 1
+                                ccf_hat_a2 = major_cn_change / (local_cn_a2 - 1)
+                            ccf_high_a2 = ((mu_major + sigma_major) * ploidy / 2 - 1) / local_cn_a2 / purity
+                            ccf_low_a2 = ((mu_major - sigma_major) * ploidy / 2 - 1) / local_cn_a2 / purity
+                        seg_tree[chrN].add(Interval(start, end,
+                                                    (self.sample_name, {'cn_a1': local_cn_a1, 'cn_a2': local_cn_a2,
+                                                                        'ccf_hat_a1': ccf_hat_a1,
+                                                                        'ccf_high_a1': ccf_high_a1,
+                                                                        'ccf_low_a1': ccf_low_a1,
+                                                                        'ccf_hat_a2': ccf_hat_a2,
+                                                                        'ccf_high_a2': ccf_high_a2,
+                                                                        'ccf_low_a2': ccf_low_a2})))
+                    except ValueError:
+                        continue
         else:
-            raise NotImplementedError('Can only read absolute segtab file')
+            raise NotImplementedError('Input file type not supported')
 
         return seg_tree
 
@@ -445,3 +510,94 @@ class TumorSample:
                (mult * PURITY - x * (PURITY * mult + (allele_cn - mult) * PURITY - allele_cn * PURITY))
         f = scipy.interpolate.interp1d(_ccf, af_hist)
         return f(x)
+
+
+# RNA Sample
+
+# TODO: Need a way to flag genes that have TPM=0 across all timepoints
+# TODO: Hugo symbols for genes? Store it as a separate mapping {gene_id -> gene_name}
+
+
+class RNASample:
+    """ """
+
+    common_field_map = {"gene_id", "transcript_id(s)", "length", "TPM"}
+
+    def __init__(self, file_name,
+                 input_type,
+                 indiv=None,
+                 sample_name=None,
+                 sample_short_id=None,
+                 DNAsource=None,
+                 timepoint=None,
+                 # By default loads file with Mitochondrial genes
+                 gene_blacklist=os.path.join(os.path.dirname(__file__), 'supplement_data/Blacklist_Genes.txt'),
+                 purity=None):
+
+        # Reference to Patient object
+        self._indiv = indiv
+        self._inut_type = input_type
+        self._sample_name = sample_name
+        self._sample_short_id = sample_short_id
+        self._DNAsource = DNAsource
+        self._timepoint = timepoint
+        self._purity = purity
+        # Blacklist genes from the analysis (Gene id and name is from gencode_v19)
+        self._gene_blacklist = self._load_blacklist_from_file(gene_blacklist)
+        # a dictionary hash table for fast TPM value lookup
+        self._tpm_values = self._load_tpm_values(file_name)
+
+    @staticmethod
+    def _load_blacklist_from_file(in_file):
+        gene_blacklist = {}
+        with open(in_file, 'r') as reader:
+            for line in reader:
+                values = line.strip().split('\t')
+                gene_blacklist[values[0]] = values[1]
+        return gene_blacklist
+
+    def _load_tpm_values(self, in_file):
+        tpm_values_dict = {}
+        with open(in_file) as reader:
+            for line in reader:
+                values = line.strip('\n').split('\t')
+                if line.startswith('gene_id'):
+                    header = {x: i for i, x in enumerate(values)}
+                else:
+                    gene_id = values[header['gene_id']]
+                    if gene_id not in self._gene_blacklist:
+                        try:
+                            tpm_value = float(values[header['TPM']])
+                        except ValueError:
+                            tpm_value = 0
+                        tpm_values_dict[gene_id] = tpm_value
+                    else:
+                        logging.debug('Gene {} is in blacklist'.format(gene_id))
+        return tpm_values_dict
+
+    @property
+    def purity(self):
+        return self._purity
+
+    @property
+    def sample_name(self):
+        return self._sample_name
+
+    @property
+    def timepoint(self):
+        return self._timepoint
+
+    def get_tpm_by_gene_id(self, gene_id):
+        return self._tpm_values[gene_id]
+
+    def get_gene_ids(self):
+        """ :return list of gene ids """
+        return list(self._tpm_values.keys())
+
+    def get_tpm_by_gene_name(self, gene_name):
+        # Handle cases where gene names that are duplicate
+        pass
+
+    @property
+    def tpm_values(self):
+        return self._tpm_values
