@@ -42,7 +42,7 @@ class PhylogicOutput(object):
                 break
         if len(set(time_points)) < len(time_points):
             time_points = []
-        cluster_dict = {c: {'muts': {}} for c in range(1, len(results.clust_CCF_dens) + 1)}
+        cluster_dict = {c: {'muts': {}, 'cnvs': {}} for c in range(1, len(results.clust_CCF_dens) + 1)}
         n_muts = dict.fromkeys(range(1, len(results.clust_CCF_dens) + 1), 0)
         c_drivers = {c: [] for c in range(1, len(results.clust_CCF_dens) + 1)}
         for i, sample in enumerate(patient.sample_list):
@@ -60,21 +60,26 @@ class PhylogicOutput(object):
                     ccf_hat, ccf_high, ccf_low = self._get_mean_high_low(mut.ccf_1d)
                     alt_cnt = mut.alt_cnt
                     ref_cnt = mut.ref_cnt
-                    cluster_dict[c]['muts'].setdefault(mut_name, {'ccf_hat': [], 'alt_cnt': [], 'ref_cnt': []})
-                    cluster_dict[c]['muts'][mut_name]['ccf_hat'].append(ccf_hat)
-                    cluster_dict[c]['muts'][mut_name]['alt_cnt'].append(alt_cnt)
-                    cluster_dict[c]['muts'][mut_name]['ref_cnt'].append(ref_cnt)
-                    cluster_dict[c]['muts'][mut_name]['chrom'] = mut.chrN
                     if mut.type != 'CNV':
+                        cluster_dict[c]['muts'].setdefault(mut_name, {'ccf_hat': [], 'alt_cnt': [], 'ref_cnt': []})
+                        cluster_dict[c]['muts'][mut_name]['ccf_hat'].append(ccf_hat)
+                        cluster_dict[c]['muts'][mut_name]['alt_cnt'].append(alt_cnt)
+                        cluster_dict[c]['muts'][mut_name]['ref_cnt'].append(ref_cnt)
+                        cluster_dict[c]['muts'][mut_name]['chrom'] = mut.chrN
                         cluster_dict[c]['muts'][mut_name]['pos'] = mut.pos
+                        if len(sample_names) == 1:
+                            cluster_dict[c]['muts'][mut_name]['ccf_dist'] = list(map(float, mut.ccf_1d))
+                        if i == 0:
+                            n_muts[c] += 1
+                            if mut_name.split('_')[0] in drivers:
+                                c_drivers[c].append(mut_name)
                     else:
-                        cluster_dict[c]['muts'][mut_name]['pos'] = ''
-                    if len(sample_names) == 1:
-                        cluster_dict[c]['muts'][mut_name]['ccf_dist'] = list(map(float, mut.ccf_1d))
-                    if i == 0:
-                        n_muts[c] += 1
-                        if mut_name.split('_')[0] in drivers:
-                            c_drivers[c].append(mut_name)
+                        cluster_dict[c]['cnvs'].setdefault(mut_name, {'ccf_hat': [], 'alt_cnt': [], 'ref_cnt': []})
+                        cluster_dict[c]['cnvs'][mut_name]['ccf_hat'].append(ccf_hat)
+                        cluster_dict[c]['cnvs'][mut_name]['alt_cnt'].append(alt_cnt)
+                        cluster_dict[c]['cnvs'][mut_name]['ref_cnt'].append(ref_cnt)
+                        cluster_dict[c]['cnvs'][mut_name]['chrom'] = mut.chrN
+                        cluster_dict[c]['cnvs'][mut_name]['pos'] = ''
         for i, ccf_hists in enumerate(results.clust_CCF_dens):
             c = i + 1
             cluster_dict[c]['color'] = ClusterColors.get_rgb_string(c)
@@ -147,7 +152,7 @@ class PhylogicOutput(object):
                                                    'tx_end': float(fields['tx_end']) if fields['tx_end'] else timepoints[-1]})
                 if tumor_sizes_file:
                     with open(tumor_sizes_file, 'r') as f:
-                        f.readline()
+                        # f.readline()
                         tumor_sizes = [list(map(float, line.strip('\n\r').split('\t'))) for line in f]
                 else:
                     tumor_sizes = [[t, 1.] for t in timepoints]
@@ -174,7 +179,7 @@ class PhylogicOutput(object):
                 ccf_hat = float(fields['postDP_ccf_mean'])
                 ccf_high = float(fields['postDP_ccf_CI_high'])
                 ccf_low = float(fields['postDP_ccf_CI_low'])
-                cluster_dict.setdefault(c, {'ccf_hat': [], 'ccf_high': [], 'ccf_low': [], 'muts': {},
+                cluster_dict.setdefault(c, {'ccf_hat': [], 'ccf_high': [], 'ccf_low': [], 'muts': {}, 'cnvs': {},
                                             'drivers': [], 'tumor_abundance': []})
                 cluster_dict[c]['ccf_hat'].append(ccf_hat)
                 cluster_dict[c]['ccf_high'].append(ccf_high)
@@ -237,14 +242,10 @@ class PhylogicOutput(object):
                     ccf_hat = float(fields['preDP_ccf_mean'])
                     c = int(fields['Cluster_Assignment'])
                     chrom = fields['Chromosome']
-                    cluster_dict[c]['muts'].setdefault(mut_name, {'ccf_hat': []})
-                    cluster_dict[c]['muts'][mut_name]['ccf_hat'].append(ccf_hat)
-                    cluster_dict[c]['muts'][mut_name]['chrom'] = chrom
-                    cluster_dict[c]['muts'][mut_name]['pos'] = ''
-                    if len(sample_names) == 1:
-                        cluster_dict[c]['muts'][mut_name]['ccf_dist'] = [float(fields[k]) for k in ccf_dist_keys]
-                    if sample == sample_names[0]:
-                        n_muts[c] += 1
+                    cluster_dict[c]['cnvs'].setdefault(mut_name, {'ccf_hat': []})
+                    cluster_dict[c]['cnvs'][mut_name]['ccf_hat'].append(ccf_hat)
+                    cluster_dict[c]['cnvs'][mut_name]['chrom'] = chrom
+                    cluster_dict[c]['cnvs'][mut_name]['pos'] = ''
         for c in cluster_dict:
             cluster_dict[c]['line_width'] = min(12, math.ceil(3 * n_muts[c] / 7.))
             cluster_dict[c]['color'] = ClusterColors.get_rgb_string(c)
@@ -405,9 +406,14 @@ class PhylogicOutput(object):
         if pie_plots:
             sample_name_table_options['pie_plots'] = pie_plots
 
-        if child_dicts:
+        if child_dicts and tree_iterations:
             tree_coordinates_list = []
-            for child_dict in child_dicts:
+            print('Plotting trees')
+            n_trees = 0
+            for child_dict, ni in zip(child_dicts, tree_iterations):
+                if ni < 10:
+                    break
+                n_trees += 1
                 n_muts = dict.fromkeys(child_dict, 0)
                 dist_from_parent = dict.fromkeys(itertools.chain(*child_dict.values()))
                 for parent in child_dict:
@@ -427,7 +433,7 @@ class PhylogicOutput(object):
 
             tree_options = {'patient': patient, 'cluster_dict': cluster_dict,
                             'child_dict': child_dicts[0], 'tree_coordinates': tree_coordinates_list[0]}
-            if len(child_dicts) > 1:
+            if n_trees > 1:
                 tree_switch_options = {'patient': patient, 'cluster_dict': cluster_dict, 'child_dicts': child_dicts,
                                        'tree_coordinates': tree_coordinates_list, 'tree_iterations': tree_iterations}
 
@@ -556,7 +562,7 @@ class PhylogicOutput(object):
                     elif abs(ang_from_parent[points[0]] - ang_from_parent[points[1]]) % math.pi <= math.pi / 6:
                         cost += 10. ** 10
                 if cost > curr_min:
-                    return curr_min + 1
+                    return curr_min
             return cost
 
         ang_from_parent = dict.fromkeys(dist_from_parent, 0.)
@@ -570,7 +576,7 @@ class PhylogicOutput(object):
                 min_cost_ang = 0
                 for a in ang_range:
                     ang_update[clust] = a
-                    curr_cost = cost_function(get_coords(ang_update))
+                    curr_cost = cost_function(get_coords(ang_update), curr_min=min_cost)
                     if curr_cost < min_cost:
                         min_cost = curr_cost
                         min_cost_ang = a
@@ -891,8 +897,8 @@ class PhylogicOutput(object):
                         f.write('\n' + '\t'.join(map(str, line)))
 
     def write_patient_cnvs(self, patient, cluster_ccfs):
-        header = ['Patient_ID', 'Sample_ID', 'Sample_Alias', 'Event_Name', 'Chromosome', 'Start_band',
-                  'End_band', 'Variant_Type', 'local_cn', 'Cluster_Assignment', 'preDP_ccf_mean',
+        header = ['Patient_ID', 'Sample_ID', 'Sample_Alias', 'Event_Name', 'Chromosome', 'Start',
+                  'End', 'Variant_Type', 'local_cn', 'Cluster_Assignment', 'preDP_ccf_mean',
                   'preDP_ccf_CI_low', 'preDP_ccf_CI_high', 'clust_ccf_mean', 'clust_ccf_CI_low', 'clust_ccf_CI_high']
         header.extend('preDP_ccf_{}'.format(float(x) / 100) for x in range(101))
         with open('{}.cnvs.txt'.format(patient.indiv_name), 'w') as f:
@@ -903,8 +909,8 @@ class PhylogicOutput(object):
                         mut_mean, mut_high, mut_low = self._get_mean_high_low(np.array(mut.ccf_1d))
                         c = mut.cluster_assignment
                         clust_mean, clust_high, clust_low = self._get_mean_high_low((np.array(cluster_ccfs[c][i])))
-                        line = [patient.indiv_name, sample.sample_name, '', mut.event_name, mut.chrN, mut.start.band,
-                                mut.end.band, 'CNV', mut.local_cn_a1 if mut.a1 else mut.local_cn_a2,
+                        line = [patient.indiv_name, sample.sample_name, '', mut.event_name, mut.chrN, mut.start,
+                                mut.end, 'CNV', mut.local_cn_a1 if mut.a1 else mut.local_cn_a2,
                                 mut.cluster_assignment, mut_mean, mut_low, mut_high, clust_mean, clust_low, clust_high]
                         line.extend(mut.ccf_1d)
                         f.write('\n' + '\t'.join(map(str, line)))
@@ -1129,8 +1135,7 @@ class ClusterColors(object):
 
     @classmethod
     def get_hex_string(cls, c):
-        return '#' + ''.join(
-            ('0' + hex(rgb)[2:].upper() if rgb < 16 else hex(rgb)[2:].upper() for rgb in cls.color_list[c]))
+        return '#' + ''.join(('%02X' % rgb for rgb in cls.color_list[c]))
 
 
 class HTMLTemplate(Template):

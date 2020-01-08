@@ -1111,10 +1111,12 @@
                       return 1
                     }
                     return 0
-                  });
-                g_len += sorted_muts.length * 12;
-                for (let ii in sorted_muts) {
-                  let mut = sorted_muts[ii],
+                  }),
+                  cnvs = cluster_dict[c].cnvs,
+                  sorted_vars = [...sorted_muts, ...Object.keys(cnvs)];
+                g_len += sorted_vars.length * 12;
+                for (let ii in sorted_vars) {
+                  let mut = sorted_vars[ii],
                     mut_group = svg_visual.append("g")
                     .attr("class", "mut_group"),
                     mut_suffix = mut.includes("_") ? mut.split("_")[1] : "p.A0A",
@@ -1142,7 +1144,7 @@
                         .attr("class", "cluster_" + c.toString());
                   for (let a in aliases) {
                     let ccf_hat = cluster_dict[c].ccf_hat[a],
-                      ccf_1d = muts[mut].ccf_hat[a],
+                      ccf_1d = mut in muts ? muts[mut].ccf_hat[a] : cnvs[mut].ccf_hat[a],
                       box_color = ccf_1d < 0.1 ? "white" : cluster_dict[c].color,
                       box_size = ccf_hat * 9 + 1,
                       a_box_stroke = ccf_hat > 0.9 ? "red" : box_stroke;
@@ -1298,22 +1300,33 @@
               } else {
                 let c = row.data().Cluster,
                   cluster_muts = widg.options.cluster_dict[c].muts,
+                  cluster_cnvs = widg.options.cluster_dict[c].cnvs,
                   drivers = widg.options.cluster_dict[c].drivers,
                   color = widg.options.cluster_dict[c].color,
                   aliases = widg.options.aliases,
                   mut_data = [];
                 for (let mut in cluster_muts) {
                   let mut_dat = {"is_driver": drivers.includes(mut) ? 0 : 1,
-                      "Cluster": mut,
-                      "Chromosome": cluster_muts[mut].chrom,
-                      "Position": cluster_muts[mut].pos
-                    },
-                    is_cnv = mut.startsWith("gain") || mut.startsWith("loss") || mut.startsWith("homdel") || mut === "WGD";
+                    "Cluster": mut,
+                    "Chromosome": cluster_muts[mut].chrom,
+                    "Position": cluster_muts[mut].pos
+                  };
                   for (let i in aliases) {
                     mut_dat[aliases[i] + " CCF"] = cluster_muts[mut].ccf_hat[i] +
-                      (is_cnv ? "" : " (" + cluster_muts[mut].alt_cnt[i] + ":" + cluster_muts[mut].ref_cnt[i] + ")");
+                      (" (" + cluster_muts[mut].alt_cnt[i] + ":" + cluster_muts[mut].ref_cnt[i] + ")");
                   }
                   mut_data.push(mut_dat);
+                }
+                for (let cnv in cluster_cnvs) {
+                  let cnv_dat = {"is_driver": 1,
+                    "Cluster": cnv,
+                    "Chromosome": cluster_cnvs[cnv].chrom,
+                    "Position": null
+                  };
+                  for (let i in aliases) {
+                    cnv_dat[aliases[i] + " CCF"] = cluster_cnvs[cnv].ccf_hat[i];
+                  }
+                  mut_data.push(cnv_dat);
                 }
                 row.child("<table id=\"cluster_" + row.data().Cluster + "_table\" class=\"hover\"></table>").show();
                 $("#cluster_" + row.data().Cluster + "_table").DataTable({
@@ -1796,6 +1809,15 @@
             .style("text-decoration", "underline")
             .text("Tumor abundance plot");
 
+          fish_plot.selectAll("circle")
+            .data(Object.keys(tumor_sizes).filter(d => d >= Math.min(...time_points) & d <= Math.max(...time_points)))
+            .join("circle")
+            .attr("cx", d => x(d))
+            .attr("cy", d => y(tumor_sizes[d]))
+            .attr("r", 3)
+            .attr("fill", "black")
+            .attr("opacity", 0.5);
+
           let t0 = time_points[0],
             linspace = [t0],
             step = (time_points[time_points.length - 1] - t0) / 100;
@@ -1921,7 +1943,7 @@
         <div id="collapseOne" class="collapse show" aria-labelledby="headingOne">
           <div class="card-body">
             <div class="row">
-              <div id="sample-name-table" style="max-height: 600px; width: 25%; padding-right: 30px; display: table-cell">
+              <div id="sample-name-table" style="max-height: 600px; width: 25%; padding-right: 30px; overflow-y: auto; display: table-cell">
               </div><div class="border-right" style="overflow-y: hidden; width: 45%; padding-right: 30px; display: table-cell">
                 <div style="min-width: 450px">
                   <div style="display: inline-block; width: 84%; vertical-align: top">
