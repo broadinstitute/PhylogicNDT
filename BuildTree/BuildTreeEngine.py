@@ -7,7 +7,9 @@ from .ShuffleMutations import shuffling
 
 class BuildTreeEngine:
 
-    def __init__(self, patient):
+    def __init__(self, patient, seed=None):
+        if seed is not None:
+            np.random.seed(seed=seed)
         """ """
         # patient object should have pointer to clustering results object but for now it is two separate objects
         self._patient = patient
