@@ -55,7 +55,7 @@ To run clustering on the provided sample input data:
 
 alternatively - provide a tsv sample_information_file (.sif) 
 
-with headers Sample_id Sample_maf Sample_CN_seg Sample_Purity Sample_Timepoint
+with headers: sample_id maf_fn seg_fn purity timepoint
 
     ./PhylogicNDT.py Cluster -i Patient_ID  -sif Patient.sif
 
