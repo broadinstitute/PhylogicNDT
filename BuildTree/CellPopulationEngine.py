@@ -40,6 +40,7 @@ class CellPopulationEngine:
         if sum(pk) == 0:
             return 0
         else:
+            pk = pk / sum(pk)
             custm = stats.rv_discrete(name='custm', values=(xk, pk))
             return custm.rvs(size=1)[0]
 
