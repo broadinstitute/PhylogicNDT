@@ -1,4 +1,5 @@
 from scipy import stats
+import random
 from random import shuffle
 import collections
 import numpy as np
@@ -10,7 +11,10 @@ import logging
 
 class CellPopulationEngine:
 
-    def __init__(self, patient):
+    def __init__(self, patient, seed=None):
+        if seed is not None:
+            random.seed(seed)
+            np.random.seed(seed=seed)
         self._patient = patient
         self._all_configurations = {}
         if patient.ClusteringResults:
@@ -36,6 +40,7 @@ class CellPopulationEngine:
         if sum(pk) == 0:
             return 0
         else:
+            pk = pk / sum(pk)
             custm = stats.rv_discrete(name='custm', values=(xk, pk))
             return custm.rvs(size=1)[0]
 

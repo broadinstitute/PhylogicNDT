@@ -96,6 +96,13 @@ def build_parser():
                              default=0.1,
                              help='ccf threshold for blacklisting clusters for a BuildTree and Cell Population')
 
+    base_parser.add_argument('--seed',
+                             type=int,
+                             action='store',
+                             dest='seed',
+                             default=None,
+                             help='input a random seed for reproducibility')
+
     # different Tools of the PhylogicNDT Package
     subparsers = parser.add_subparsers(title="tool", description="Choose a tool to run", help='Try the Cluster tool')
 

@@ -37,8 +37,10 @@ else:
 class DpEngine:
 
     def __init__(self, data, N_iter, Pi_k, use_fixed=False, co_assign_flag=False, ignore_nan=False, tsne=True,
-                 mode=None):
-        # np.random.seed(seed=69173)
+                 mode=None, seed=None):
+        if seed is not None:
+            random.seed(seed)
+            np.random.seed(seed=seed)
         self.data = data
         self.num_bins = data.n_bins
         self.n_samples = data.n_samples

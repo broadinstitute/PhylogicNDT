@@ -18,7 +18,7 @@ def run_tool(args):
     load_clustering_results(args.cluster_ccf_file, patient_data, args.blacklist_threshold, args.blacklist_cluster)
     patient_data.preprocess_samples()
     # Building Phylogenetic Tree
-    bt_engine = BuildTreeEngine(patient_data)
+    bt_engine = BuildTreeEngine(patient_data, seed=args.seed)
     bt_engine.build_tree(n_iter=args.n_iter)
     # Output and visualization
     phylogicoutput = output.PhylogicOutput.PhylogicOutput()
@@ -31,7 +31,7 @@ def run_tool(args):
     # patient_data.TreeEnsemble = bt_engine.trees
 
     # Computing Cell Population
-    cp_engine = CellPopulationEngine(patient_data)
+    cp_engine = CellPopulationEngine(patient_data, seed=args.seed)
     constrained_ccf = cp_engine.compute_constrained_ccf(n_iter=args.n_iter)
 
     cell_abundance = cp_engine.get_cell_abundance_across_samples(constrained_ccf)

@@ -24,7 +24,7 @@ def run_tool(args):
     tree.set_new_edges(tree_edges)
     patient_data.TopTree = tree
     # Computing Cell Population
-    cp_engine = CellPopulationEngine(patient_data)
+    cp_engine = CellPopulationEngine(patient_data, seed=args.seed)
     constrained_ccf = cp_engine.compute_constrained_ccf()
 
     cell_ancestry = bt_engine.get_cell_ancestry()
