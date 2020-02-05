@@ -94,6 +94,7 @@ class TumorSample:
 
         self.concordant_variants = []  # store variants concordant with other tumor samples
         # self.concordant_with_samples = []  # store  with other tumor samples were used for variants concordance
+        self.purity = purity
 
     @staticmethod
     def _rebin_to_n(y, n):
@@ -383,7 +384,7 @@ class TumorSample:
         if input_type == 'auto':
             if not seg_file:
                 input_type = 'none'
-            elif seg_file.endswith('.segtab.txt') or seg_file.endswith('.seg.txt'):
+            elif seg_file.endswith('.segtab.txt'):
                 input_type = 'absolute'
             elif seg_file.endswith('.tsv'):
                 input_type = 'alleliccapseg'
@@ -395,6 +396,7 @@ class TumorSample:
         if input_type == 'none':
             return None
         elif input_type == 'absolute':
+            print('Warning: using ABSOLUTE seg file')
             with open(seg_file, 'r') as fh:
                 header = fh.readline().strip('\n').split('\t')
                 for line in fh:
@@ -419,6 +421,20 @@ class TumorSample:
                                                                         'ccf_hat_a2': ccf_hat_a2,
                                                                         'ccf_high_a2': ccf_high_a2,
                                                                         'ccf_low_a2': ccf_low_a2})))
+                    except ValueError:
+                        continue
+        elif input_type == 'timing_format':
+            with open(seg_file, 'r') as fh:
+                header = fh.readline().strip('\n').split('\t')
+                for line in fh:
+                    try:
+                        row = dict(zip(header, line.strip('\n').split('\t')))
+                        chrN = row['Chromosome']
+                        start = int(row['Start'])
+                        end = int(row['End'])
+                        cn_a1 = float(row['A1.Seg.CN'])
+                        cn_a2 = float(row['A2.Seg.CN'])
+                        seg_tree[chrN].add(Interval(start, end, (self.sample_name, {'cn_a1': cn_a1, 'cn_a2': cn_a2})))
                     except ValueError:
                         continue
         elif input_type == 'alleliccapseg':

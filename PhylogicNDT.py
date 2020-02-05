@@ -27,6 +27,7 @@ import PhylogicSim.Simulations
 import BuildTree.BuildTree  # Tree Building Tool
 import BuildTree.CellPopulation
 import GrowthKinetics.GrowthKinetics
+import SinglePatientTiming.SinglePatientTiming
 
 
 def build_parser():
@@ -404,6 +405,26 @@ def build_parser():
                              default=None,
                              help='TSV File of purity values for each sample, and optionally a 2/3/4 column with a, b and n values. Number of samples needs to match ns.')
     simulations.set_defaults(func=PhylogicSim.Simulations.run_tool)
+
+    timing = subparsers.add_parser("Timing", help="Time somatic events in one or multiple samples.",
+                                   parents=[base_parser])
+    timing.add_argument('-min_supporting_muts',
+                        type=int,
+                        action='store',
+                        dest='min_supporting_muts',
+                        default=3,
+                        help='Minimum number of supporting mutations to time a copy number event')
+    timing.set_defaults(func=SinglePatientTiming.SinglePatientTiming.run_tool)
+
+    single_patient_timing = subparsers.add_parser("SinglePatientTiming", help="Time somatic events in one or multiple samples.",
+                                   parents=[base_parser])
+    single_patient_timing.add_argument('-min_supporting_muts',
+                        type=int,
+                        action='store',
+                        dest='min_supporting_muts',
+                        default=3,
+                        help='Minimum number of supporting mutations to time a copy number event')
+    single_patient_timing.set_defaults(func=SinglePatientTiming.SinglePatientTiming.run_tool)
 
     # print help without -h
     if len(sys.argv) < 2: parser.print_help(sys.stderr)
