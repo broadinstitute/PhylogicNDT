@@ -536,9 +536,11 @@ class PhylogicOutput(object):
                 if cost > curr_min:
                     return curr_min + 1
             # Cost for crossing edges and angles < 30 degrees
-            for e1, e2 in itertools.combinations(itertools.chain(*map(lambda k: itertools.product([k[0]], k[1]), child_dict.items())), 2):
+            parent_child_tuples = list(map(lambda k: itertools.product([k[0]], k[1]), child_dict.items()))
+            for e1, e2 in itertools.combinations(itertools.chain(*parent_child_tuples), 2):
                 if len(set(e1)) != 2 or len(set(e2)) != 2:
-                    raise ValueError('Strange tree')
+                    # Strange Tree
+                    continue
                 points = set(e1).union(e2)
                 if len(points) == 4:
                     A = coord_dict[e1[0]]
@@ -883,10 +885,13 @@ class PhylogicOutput(object):
             f.write('\t'.join(header))
             for i, sample in enumerate(patient.sample_list):
                 for mut in itertools.chain(sample.mutations, sample.low_coverage_mutations.values()):
-                    if hasattr(mut, 'cluster_assignment') and mut.cluster_assignment and mut.type != 'CNV':
+                    if mut.type != 'CNV':
                         mut_mean, mut_high, mut_low = self._get_mean_high_low(np.array(mut.ccf_1d))
-                        c = mut.cluster_assignment
-                        clust_mean, clust_high, clust_low = self._get_mean_high_low((np.array(cluster_ccfs[c][i])))
+                        c = mut.cluster_assignment if hasattr(mut, 'cluster_assignment') else None
+                        if c:
+                            clust_mean, clust_high, clust_low = self._get_mean_high_low((np.array(cluster_ccfs[c][i])))
+                        else:
+                            clust_mean, clust_high, clust_low = None, None, None
                         line = [patient.indiv_name, sample.sample_name, aliases[i], mut.gene if mut.gene else 'Unknown',
                                 str(mut.chrN), str(mut.pos), mut.ref, mut.alt, str(mut.ref_cnt), str(mut.alt_cnt),
                                 str(mut.prot_change), mut.mut_category, mut.type,
@@ -905,10 +910,13 @@ class PhylogicOutput(object):
             f.write('\t'.join(header))
             for i, sample in enumerate(patient.sample_list):
                 for mut in sample.low_coverage_mutations.values():
-                    if mut.type == 'CNV' and hasattr(mut, 'cluster_assignment') and mut.cluster_assignment:
+                    if mut.type == 'CNV':
                         mut_mean, mut_high, mut_low = self._get_mean_high_low(np.array(mut.ccf_1d))
-                        c = mut.cluster_assignment
-                        clust_mean, clust_high, clust_low = self._get_mean_high_low((np.array(cluster_ccfs[c][i])))
+                        c = mut.cluster_assignment if hasattr(mut, 'cluster_assignment') else None
+                        if c:
+                            clust_mean, clust_high, clust_low = self._get_mean_high_low((np.array(cluster_ccfs[c][i])))
+                        else:
+                            clust_mean, clust_high, clust_low = (None, None, None)
                         line = [patient.indiv_name, sample.sample_name, '', mut.event_name, mut.chrN, mut.start,
                                 mut.end, 'CNV', mut.local_cn_a1 if mut.a1 else mut.local_cn_a2,
                                 mut.cluster_assignment, mut_mean, mut_low, mut_high, clust_mean, clust_low, clust_high]
@@ -1059,13 +1067,63 @@ class PhylogicOutput(object):
         """
         raise NotImplementedError
 
-    def write_timing_tsv(self):
+    def write_timing_tsv(self, timing_engine):
         """
 
         Returns:
 
         """
-        raise NotImplementedError
+        header = ['Patient_ID', 'Event Name', 'Chromosome', 'Arm', 'Start_position', 'Reference_Allele',
+                  'Tumor_Seq_Allele', 't_ref_count', 't_alt_count', 'Allelic_CN_minor', 'Allelic_CN_major',
+                  'Allelic_CN', 'pi_mean', 'pi_low', 'pi_high']
+        header.extend('pi_{}'.format(float(x) / 100) for x in range(101))
+        patient_name = timing_engine.patient.indiv_name
+        null_pi = ('',) * 101
+        with open(patient_name + '.timing.tsv', 'w') as f:
+            f.write('\t'.join(header))
+            if timing_engine.WGD is not None:
+                pi_mean, pi_high, pi_low = self._get_mean_high_low(timing_engine.WGD.pi_dist)
+                line = [patient_name, 'WGD', '', '', '', '', '', '', '', '', '', '', pi_mean, pi_low, pi_high]
+                line.extend(timing_engine.WGD.pi_dist)
+                f.write('\n' + '\t'.join(map(str, line)))
+            for cn_event_list in timing_engine.truncal_cn_events.values():
+                for cn_event in cn_event_list:
+                    if cn_event.pi_dist is not None and not any(np.isnan(cn_event.pi_dist)):
+                        pi_mean, pi_high, pi_low = self._get_mean_high_low(cn_event.pi_dist)
+                        pi_dist = cn_event.pi_dist
+                    else:
+                        pi_mean = pi_high = pi_low = ''
+                        pi_dist = null_pi
+                    line = [patient_name, cn_event.event_name, cn_event.chrN, cn_event.arm, '', '', '', '', '',
+                            cn_event.cn_a1, cn_event.cn_a2, cn_event.allelic_cn, pi_mean, pi_low, pi_high]
+                    line.extend(pi_dist)
+                    f.write('\n' + '\t'.join(map(str, line)))
+            for mut in timing_engine.mutations.values():
+                if mut.pi_dist is not None and not any(np.isnan(mut.pi_dist)):
+                    pi_mean, pi_high, pi_low = self._get_mean_high_low(mut.pi_dist)
+                    pi_dist = mut.pi_dist
+                else:
+                    pi_mean = pi_high = pi_low = ''
+                    pi_dist = null_pi
+                line = [patient_name, mut.event_name, mut.chrN, '', mut.pos, mut.ref, mut.alt, mut.ref_cnt, mut.alt_cnt,
+                        mut.local_cn_a1, mut.local_cn_a2, '', pi_mean, pi_low, pi_high]
+                line.extend(pi_dist)
+                f.write('\n' + '\t'.join(map(str, line)))
+
+    @staticmethod
+    def write_comp_table(indiv_id, comps):
+        with open(indiv_id + '.comp.tsv', 'w') as f:
+            f.write('samp\teve1\teve2\tp1->2\tp2->1\tunknown')
+            for eve_pair in comps:
+                p1_2, p2_1, p_unknown = comps[eve_pair]
+                eve1, eve2 = eve_pair
+                f.write('\n' + '\t'.join(map(str, [indiv_id, eve1, eve2, p1_2, p2_1, p_unknown])))
+
+
+    @staticmethod
+    def _get_timing_graph_coordinates(pi_dists, coincidence_thresh=.5, eves_per_row=2):
+
+        return
 
 
 class ClusterColors(object):

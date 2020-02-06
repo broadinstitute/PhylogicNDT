@@ -95,6 +95,7 @@ class Patient:
         # BuildTree
         self.TopTree = None
         self.TreeEnsemble = []
+        self.alt_cn_states = []
 
     def initPatient(self):
         """ accepted input types abs; txt; sqlite3 .db # auto tab if .txt, .tsv or .tab ; abs if .Rdata; sqlite if .db """
@@ -127,8 +128,8 @@ class Patient:
         logging.debug('{} genes have TPM values less a than 1.0 across all timepoints.'.format(count_low_exp_genes))
         logging.debug('{} genes will be used in the analysis.'.format(len(self.concordant_genes)))
 
-    def addSample(self, filen, sample_name, input_type='auto', grid_size=101, seg_file=None, _additional_muts=None,
-                  purity=None, timepoint_value=None):
+    def addSample(self, filen, sample_name, input_type='auto', seg_input_type='auto', grid_size=101, seg_file=None,
+                  _additional_muts=None, purity=None, timepoint_value=None):
         """ accepted input types abs; txt; sqlite3 .db # auto tab if .txt, .tsv or .tab ; abs if .Rdata; sqlite if .db"""
 
         if _additional_muts == []:
@@ -138,7 +139,7 @@ class Patient:
 
         # make new sample and add to exiting list of samples
         logging.info("Adding Mutations from Sample: %s", sample_name)
-        new_sample = TumorSample(filen, input_type, sample_name=sample_name,
+        new_sample = TumorSample(filen, input_type, seg_input_type=seg_input_type, sample_name=sample_name,
                                  artifact_blacklist=self.PatientLevel_MutBlacklist,
                                  artifact_whitelist=self.PatientLevel_MutWhitelist,
                                  ccf_grid_size=grid_size, PoN=self.PoN_file, indiv=self.indiv_name,
@@ -354,6 +355,10 @@ class Patient:
             else:
                 print('Did not cluster ' + str(mut))
                 self.unclustered_muts.append(mut)
+                for sample in self.sample_list:
+                    mut = sample.get_mut_by_varstr(mut.var_str)
+                    mut.cluster_assignment = None
+                    mut.clust_ccf = None
 
     def intersect_cn_trees(self):
         """
