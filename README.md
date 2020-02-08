@@ -103,6 +103,22 @@ To run SinglePatientTiming:
 
     ./PhylogicNDT.py Timing -i Indiv_ID -sif Patient.sif
 
+### LeagueModel
+LeagueModel requires an input of comparison tables.
+The comparison tables should be the output of SinglePatientTiming ending in ".comp.tsv"
+
+To run LeagueModel:
+
+    ./PhylogicNDT.py LeagueModel -cohort Cohort -comps comp1 comp2 ... compN
+
+Alternatively, one can use a single aggregated table. The table should have the following columns:
+
+    sample  event1  event2  p_event1_win    p_event2_win    unknown
+
+To run with the aggregated table:
+
+    ./PhylogicNDT.py LeagueModel -cohort Cohort -comparison_cn comps
+
 ### PhylogicSim 
 A simulation module is provided for convenience.
 
