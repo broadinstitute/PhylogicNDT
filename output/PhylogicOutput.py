@@ -885,13 +885,10 @@ class PhylogicOutput(object):
             f.write('\t'.join(header))
             for i, sample in enumerate(patient.sample_list):
                 for mut in itertools.chain(sample.mutations, sample.low_coverage_mutations.values()):
-                    if mut.type != 'CNV':
+                    if mut.type != 'CNV' and hasattr(mut, 'cluster_assignment') and mut.cluster_assignment is not None:
                         mut_mean, mut_high, mut_low = self._get_mean_high_low(np.array(mut.ccf_1d))
-                        c = mut.cluster_assignment if hasattr(mut, 'cluster_assignment') else None
-                        if c:
-                            clust_mean, clust_high, clust_low = self._get_mean_high_low((np.array(cluster_ccfs[c][i])))
-                        else:
-                            clust_mean, clust_high, clust_low = None, None, None
+                        c = mut.cluster_assignment
+                        clust_mean, clust_high, clust_low = self._get_mean_high_low((np.array(cluster_ccfs[c][i])))
                         line = [patient.indiv_name, sample.sample_name, aliases[i], mut.gene if mut.gene else 'Unknown',
                                 str(mut.chrN), str(mut.pos), mut.ref, mut.alt, str(mut.ref_cnt), str(mut.alt_cnt),
                                 str(mut.prot_change), mut.mut_category, mut.type,
@@ -1086,7 +1083,7 @@ class PhylogicOutput(object):
                 line = [patient_name, 'WGD', '', '', '', '', '', '', '', '', '', '', pi_mean, pi_low, pi_high]
                 line.extend(timing_engine.WGD.pi_dist)
                 f.write('\n' + '\t'.join(map(str, line)))
-            for cn_event_list in timing_engine.truncal_cn_events.values():
+            for cn_event_list in timing_engine.all_cn_events.values():
                 for cn_event in cn_event_list:
                     if cn_event.pi_dist is not None and not any(np.isnan(cn_event.pi_dist)):
                         pi_mean, pi_high, pi_low = self._get_mean_high_low(cn_event.pi_dist)
@@ -1109,6 +1106,25 @@ class PhylogicOutput(object):
                         mut.local_cn_a1, mut.local_cn_a2, '', pi_mean, pi_low, pi_high]
                 line.extend(pi_dist)
                 f.write('\n' + '\t'.join(map(str, line)))
+        if timing_engine.WGD is not None:
+            wgd_header = ['Patient_ID', 'Event Name', 'Chromosome', 'Arm', 'Allelic_CN_minor', 'Allelic_CN_major',
+                          'Allelic_CN', 'pi_mean', 'pi_low', 'pi_high']
+            wgd_header.extend('pi_{}'.format(float(x) / 100) for x in range(101))
+            with open(patient_name + '.WGD_supporting_events.timing.tsv', 'w') as f:
+                f.write('\t'.join(wgd_header))
+                for state in timing_engine.WGD.supporting_arm_states:
+                    for cn_event in state.cn_events:
+                        if cn_event.pi_dist is not None and not any(np.isnan(cn_event.pi_dist)):
+                            pi_mean, pi_high, pi_low = self._get_mean_high_low(cn_event.pi_dist)
+                            pi_dist = cn_event.pi_dist
+                        else:
+                            pi_mean = pi_high = pi_low = ''
+                            pi_dist = null_pi
+                        line = [patient_name, cn_event.event_name, cn_event.chrN, cn_event.arm,
+                                cn_event.cn_a1, cn_event.cn_a2, cn_event.allelic_cn, pi_mean, pi_low, pi_high]
+                        line.extend(pi_dist)
+                        f.write('\n' + '\t'.join(map(str, line)))
+
 
     @staticmethod
     def write_comp_table(indiv_id, comps):
@@ -1187,13 +1203,13 @@ class ClusterColors(object):
                   [162, 139, 145],
                   [0, 0, 0]]  # black
 
-    @ classmethod
+    @classmethod
     def get_rgb_string(cls, c):
         return 'rgb({},{},{})'.format(*cls.color_list[c])
 
     @classmethod
     def get_hex_string(cls, c):
-        return '#' + ''.join(('%02X' % rgb for rgb in cls.color_list[c]))
+        return '#{:02X}{:02X}{:02X}'.format(*cls.color_list[c])
 
 
 class HTMLTemplate(Template):

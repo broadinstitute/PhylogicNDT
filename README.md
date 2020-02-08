@@ -91,6 +91,18 @@ Run Cluster together with BuildTree
 
 	./PhylogicNDT.py Cluster -i Patient_ID  -sif Patient.sif -rb
 
+### SinglePatientTiming
+
+SinglePatientTiming requires a maf input and a seg file input for each sample.
+The maf file should be the output of PhylogicNDT Clustering module.
+The seg file should have the following columns:
+
+    Chromosome  Start   End A1.Seg.CN   A2.Seg.CN
+
+To run SinglePatientTiming:
+
+    ./PhylogicNDT.py Timing -i Indiv_ID -sif Patient.sif
+
 ### PhylogicSim 
 A simulation module is provided for convenience.
 
