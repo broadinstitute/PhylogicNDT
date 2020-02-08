@@ -28,6 +28,7 @@ import BuildTree.BuildTree  # Tree Building Tool
 import BuildTree.CellPopulation
 import GrowthKinetics.GrowthKinetics
 import SinglePatientTiming.SinglePatientTiming
+import LeagueModel.LeagueModel
 
 
 def build_parser():
@@ -425,6 +426,88 @@ def build_parser():
                         default=3,
                         help='Minimum number of supporting mutations to time a copy number event')
     single_patient_timing.set_defaults(func=SinglePatientTiming.SinglePatientTiming.run_tool)
+
+    leaguemodel = subparsers.add_parser("LeagueModel", help="Time somatic events across a cohort.",
+                                         parents=[base_parser])
+    leaguemodel.add_argument('--cohort', '-cohort',
+                             type=str,
+                             action='store',
+                             dest='cohort',
+                             default='None',
+                             help='cohort name')
+    leaguemodel.add_argument('--comps', '-comps',
+                             type=str,
+                             nargs='+',
+                             action='store',
+                             dest='comps',
+                             help='all comparison inputs')
+    leaguemodel.add_argument('--comparison_fn', '-comparison_fn',
+                             type=str,
+                             action='store',
+                             dest='comparison_fn',
+                             default=None,
+                             help='comparison file')
+    leaguemodel.add_argument('--n_perms', '-n_perms',
+                             type=int,
+                             action='store',
+                             dest='n_perms',
+                             default='500',
+                             help='number of permutations')
+    leaguemodel.add_argument('--n_seasons', '-n_seasons',
+                             type=int,
+                             action='store',
+                             dest='n_seasons',
+                             default=200,
+                             help='number of seasons')
+    leaguemodel.add_argument('--percent_subset', '-percent_subset',
+                             type=float,
+                             action='store',
+                             dest='percent_subset',
+                             default=0.8,
+                             help='percent samples to subset in each permutation of league model')
+    leaguemodel.add_argument('--keep_samps_w_event', '-keep_samps_w_event',
+                             type=str,
+                             action='store',
+                             dest='keep_samps_w_event',
+                             default=None,
+                             help='keep only samples with specified event')
+    leaguemodel.add_argument('--remove_samps_w_event', '-remove_samps_w_event',
+                             type=str,
+                             action='store',
+                             dest='remove_samps_w_event',
+                             default=None,
+                             help='keep only samples with specified event')
+    leaguemodel.add_argument('--force_final_event_list', '-force_final_event_list',
+                             type=str,
+                             action='store',
+                             dest='force_final_event_list',
+                             default=None,
+                             help='force_final_event_list')
+    leaguemodel.add_argument('--split_fn', '-split_fn',
+                             type=str,
+                             action='store',
+                             dest='split_fn',
+                             default=None,
+                             help='split file')
+    leaguemodel.add_argument('--split_flag', '-split_flag',
+                             type=str,
+                             action='store',
+                             dest='split_flag',
+                             default=None,
+                             help='split file')
+    leaguemodel.add_argument('--final_sample_list', '-final_sample_list',
+                             type=str,
+                             action='store',
+                             dest='final_sample_list',
+                             default=None,
+                             help='final sample list file')
+    leaguemodel.add_argument('--num_games_against_each_opponent', '-num_games_against_each_opponent',
+                             type=int,
+                             action='store',
+                             dest='num_games_against_each_opponent',
+                             default=2,
+                             help='number of games each opponent plays against another in a season')
+    leaguemodel.set_defaults(func=LeagueModel.LeagueModel.run_league_model)
 
     # print help without -h
     if len(sys.argv) < 2: parser.print_help(sys.stderr)
