@@ -355,10 +355,10 @@ class Patient:
             else:
                 print('Did not cluster ' + str(mut))
                 self.unclustered_muts.append(mut)
-                for sample in self.sample_list:
-                    mut = sample.get_mut_by_varstr(mut.var_str)
-                    mut.cluster_assignment = None
-                    mut.clust_ccf = None
+                # for sample in self.sample_list:
+                #     mut = sample.get_mut_by_varstr(mut.var_str)
+                #     mut.cluster_assignment = None
+                #     mut.clust_ccf = None
 
     # def intersect_cn_trees(self):
     #     """

@@ -885,13 +885,10 @@ class PhylogicOutput(object):
             f.write('\t'.join(header))
             for i, sample in enumerate(patient.sample_list):
                 for mut in itertools.chain(sample.mutations, sample.low_coverage_mutations.values()):
-                    if mut.type != 'CNV':
+                    if mut.type != 'CNV' and hasattr(mut, 'cluster_assignment') and mut.cluster_assignment is not None:
                         mut_mean, mut_high, mut_low = self._get_mean_high_low(np.array(mut.ccf_1d))
-                        c = mut.cluster_assignment if hasattr(mut, 'cluster_assignment') else None
-                        if c:
-                            clust_mean, clust_high, clust_low = self._get_mean_high_low((np.array(cluster_ccfs[c][i])))
-                        else:
-                            clust_mean, clust_high, clust_low = None, None, None
+                        c = mut.cluster_assignment
+                        clust_mean, clust_high, clust_low = self._get_mean_high_low((np.array(cluster_ccfs[c][i])))
                         line = [patient.indiv_name, sample.sample_name, aliases[i], mut.gene if mut.gene else 'Unknown',
                                 str(mut.chrN), str(mut.pos), mut.ref, mut.alt, str(mut.ref_cnt), str(mut.alt_cnt),
                                 str(mut.prot_change), mut.mut_category, mut.type,

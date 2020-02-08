@@ -212,7 +212,7 @@ class TumorSample:
                 else:
                     sample_id = values[header['Sample_ID']]
                     if sample_id == self.sample_name:
-                        cluster_id = int(values[header['Cluster_Assignment']]) if values[header['Cluster_Assignment']] else None
+                        cluster_id = int(values[header['Cluster_Assignment']])
                         chromosome = values[header['Chromosome']]
                         position = values[header['Start_position']]
                         ref = values[header['Reference_Allele']]
