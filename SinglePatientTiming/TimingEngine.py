@@ -36,10 +36,10 @@ class TimingEngine(object):
         self.get_concordant_cn_states()
         self.WGD = None
         self.call_wgd()
-        self.truncal_cn_events = {}
-        self.get_arm_level_cn_events()
         self.mutations = {}
         self.get_mutations()
+        self.truncal_cn_events = {}
+        self.get_arm_level_cn_events()
 
     def get_concordant_cn_states(self):
         """
@@ -48,41 +48,54 @@ class TimingEngine(object):
         n_samples = len(self.sample_list)
         purity = [sample.purity for sample in self.sample_list]
         self.concordant_cn_states = {}
-        self.all_cn_events = {gl + chrN + arm: [] for gl, (chrN, arm) in itertools.product(('gain_', 'loss_'), self.arm_regions)}
         for chrN, arm in self.arm_regions:
             region = chrN + arm
             states_across_samples = {}  # hold union of all copy number states in all samples
             for sample in self.sample_list:
                 if region in sample.cn_states:
-                    state = (sample.cn_states[region].cn_a1, sample.cn_states[region].cn_a2)
+                    if 0. <= sample.cn_states[region].cn_a1 < 1.:
+                        cn_a1 = 0.
+                    elif 1. < sample.cn_states[region].cn_a1 <= 2.:
+                        cn_a1 = 2.
+                    else:
+                        cn_a1 = round(sample.cn_states[region].cn_a1)
+                    if 0. <= sample.cn_states[region].cn_a2 < 1.:
+                        cn_a2 = 0.
+                    elif 1. < sample.cn_states[region].cn_a2 <= 2.:
+                        cn_a2 = 2.
+                    else:
+                        cn_a2 = round(sample.cn_states[region].cn_a2)
+                    state = (cn_a1, cn_a2)
                     states_across_samples.setdefault(state, [])
                     states_across_samples[state].append(sample.cn_states[region])
             for state in states_across_samples:
-                is_concordant = len(states_across_samples[state]) == n_samples  # filter states not present in all samples
-                # get all supporting muts from all samples
-                supporting_mut_varstr = {mut.var_str for mut in states_across_samples[state][0].supporting_muts}
-                for sample_state in states_across_samples[state]:
-                    supporting_mut_varstr = supporting_mut_varstr & {mut.var_str for mut in sample_state.supporting_muts}
-                supporting_muts = []
-                for mut_varstr in supporting_mut_varstr:
-                    mut = self.sample_list[0][mut_varstr]
-                    alt_cnt = np.array([sample[mut_varstr].alt_cnt for sample in self.sample_list])
-                    ref_cnt = np.array([sample[mut_varstr].ref_cnt for sample in self.sample_list])
-                    ccf_hat = np.array([sample[mut_varstr].ccf_hat for sample in self.sample_list])
-                    is_clonal = all(sample[mut_varstr].is_clonal for sample in self.sample_list)
-                    nd_mut = TimingMut(self.sample_list, mut.gene, mut.chrN, mut.pos, mut.alt, mut.ref, alt_cnt,
-                                       ref_cnt, mut.local_cn_a1, mut.local_cn_a2, ccf_hat, prot_change=mut.prot_change,
-                                       is_clonal=is_clonal)
-                    supporting_muts.append(nd_mut)
-                    if is_concordant:
+                if len(states_across_samples[state]) == n_samples:  # filter states not present in all samples
+                    # get all supporting muts from all samples
+                    supporting_mut_varstr = {mut.var_str for mut in states_across_samples[state][0].supporting_muts}
+                    for sample_state in states_across_samples[state]:
+                        supporting_mut_varstr = supporting_mut_varstr & {mut.var_str for mut in sample_state.supporting_muts}
+                    supporting_muts = []
+                    for mut_varstr in supporting_mut_varstr:
+                        mut = self.sample_list[0][mut_varstr]
+                        alt_cnt = np.zeros(n_samples)
+                        ref_cnt = np.zeros(n_samples)
+                        ccf_dist = np.zeros((n_samples, 101))
+                        cn_a1 = np.zeros(n_samples)
+                        cn_a2 = np.zeros(n_samples)
+                        for i, sample in enumerate(self.sample_list):
+                            alt_cnt[i] = sample[mut_varstr].alt_cnt
+                            ref_cnt[i] = sample[mut_varstr].ref_cnt
+                            ccf_dist[i, :] = sample[mut_varstr].ccf_dist
+                            cn_a1[i] = sample[mut_varstr].local_cn_a1
+                            cn_a2[i] = sample[mut_varstr].local_cn_a2
+                        nd_mut = TimingMut(self.sample_list, mut.gene, mut.chrN, mut.pos, mut.alt, mut.ref, alt_cnt,
+                                           ref_cnt, cn_a1, cn_a2, ccf_dist, prot_change=mut.prot_change,
+                                           cluster_assignment=mut.cluster_assignment)
+                        supporting_muts.append(nd_mut)
                         self.timeable_muts[mut_varstr] = nd_mut
-                multisample_state = TimingCNState(self.sample_list, chrN, arm, state, purity, supporting_muts=supporting_muts)
-                if is_concordant:
+                    multisample_state = TimingCNState(self.sample_list, chrN, arm, state, purity,
+                                                      supporting_muts=supporting_muts)
                     self.concordant_cn_states[chrN + arm] = multisample_state
-                else:
-                    multisample_state.call_events(truncal=False)
-                    for eve in multisample_state.cn_events:
-                        self.all_cn_events[eve.event_name].append(eve)
 
     def call_wgd(self, concordance_threshold=.8, tol=.2):  # TODO: try other concordance thresholds
         """
@@ -104,7 +117,7 @@ class TimingEngine(object):
             region = str(chrN) + arm
             if region in self.concordant_cn_states:
                 cn_state = self.concordant_cn_states[region]
-                if (cn_state.cn_a1 <= tol or cn_state.cn_a1 >= 2 - tol) and cn_state.cn_a2 >= 2 - tol:  # region supports WGD if 0/>=2 or >=2/>=2
+                if all(sample.cn_states[region].cn_a2 >= 2 for sample in self.sample_list):
                     # make new TimingCNState instances for WGD since patient level states will be called relative to WGD
                     regions_supporting_WGD.append(TimingCNState([self], cn_state.chrN, cn_state.arm,
                         (cn_state.cn_a1, cn_state.cn_a2), cn_state.purity, supporting_muts=cn_state.supporting_muts))
@@ -112,28 +125,65 @@ class TimingEngine(object):
         for cn_state in self.concordant_cn_states.values():
             cn_state.call_events(wgd=True)  # call copy number events relative to WGD
 
-    def get_arm_level_cn_events(self):
-        """
-        attach truncal copy number events to engine
-        """
-        self.truncal_cn_events = {gl + chrN + arm: [] for gl, (chrN, arm) in itertools.product(('gain_', 'loss_'), self.arm_regions)}
-        for cn_state in self.concordant_cn_states.values():
-            for eve in cn_state.cn_events:
-                self.truncal_cn_events[eve.event_name].append(eve)
-                self.all_cn_events[eve.event_name].append(eve)
-
     def get_mutations(self):
         for mut_varstr in self.sample_list[0].mut_lookup_table:
             if mut_varstr in self.timeable_muts:
                 self.mutations[mut_varstr] = self.timeable_muts[mut_varstr]
             else:
                 mut = self.sample_list[0][mut_varstr]
-                alt_cnt = np.array([sample[mut_varstr].alt_cnt for sample in self.sample_list])
-                ref_cnt = np.array([sample[mut_varstr].ref_cnt for sample in self.sample_list])
-                ccf_hat = np.array([sample[mut_varstr].ccf_hat for sample in self.sample_list])
+                n_samples = len(self.sample_list)
+                alt_cnt = np.zeros(n_samples)
+                ref_cnt = np.zeros(n_samples)
+                ccf_dist = np.zeros((n_samples, 101))
+                cn_a1 = np.zeros(n_samples)
+                cn_a2 = np.zeros(n_samples)
+                for i, sample in enumerate(self.sample_list):
+                    alt_cnt[i] = sample[mut_varstr].alt_cnt
+                    ref_cnt[i] = sample[mut_varstr].ref_cnt
+                    ccf_dist[i, :] = sample[mut_varstr].ccf_dist
+                    cn_a1[i] = sample[mut_varstr].local_cn_a1
+                    cn_a2[i] = sample[mut_varstr].local_cn_a2
                 nd_mut = TimingMut(self.sample_list, mut.gene, mut.chrN, mut.pos, mut.alt, mut.ref, alt_cnt,
-                                   ref_cnt, mut.local_cn_a1, mut.local_cn_a2, ccf_hat, prot_change=mut.prot_change)
+                                   ref_cnt, mut.local_cn_a1, mut.local_cn_a2, ccf_dist, prot_change=mut.prot_change,
+                                   cluster_assignment=mut.cluster_assignment)
                 self.mutations[mut_varstr] = nd_mut
+
+    def get_arm_level_cn_events(self):
+        """
+        attach truncal copy number events to engine
+        """
+        self.truncal_cn_events = {gl + chrN + arm: [] for gl, (chrN, arm) in itertools.product(('gain_', 'loss_'), self.arm_regions)}
+        self.all_cn_events = {gl + chrN + arm: [] for gl, (chrN, arm) in itertools.product(('gain_', 'loss_'), self.arm_regions)}
+        cluster_ccfs = self._get_cluster_ccfs()
+        sample_idx = range(len(self.sample_list))
+        for cn_state in self.concordant_cn_states:
+            for i, eve in enumerate(self.concordant_cn_states[cn_state].cn_events):
+                ccf_hats = []
+                for sample in self.sample_list:
+                    ccf_hats.append(sample.cn_states[cn_state].cn_events[i].ccf_hat)
+                ccf_idx = np.round(np.array(ccf_hats) * 100).astype(int)
+                clonal_concordance = np.prod(cluster_ccfs[1][sample_idx, ccf_idx])
+                is_clonal = True
+                for c in cluster_ccfs:
+                    if np.prod(cluster_ccfs[c][sample_idx, ccf_idx]) > clonal_concordance:
+                        is_clonal = False
+                        break
+                eve.is_clonal = is_clonal
+                self.all_cn_events[eve.event_name].append(eve)
+                if is_clonal:
+                    self.truncal_cn_events[eve.event_name].append(eve)
+
+    def _get_cluster_ccfs(self):
+        n_samples = len(self.sample_list)
+        cluster_ccfs = {}
+        for mut in self.mutations.values():
+            c = mut.cluster_assignment
+            if c is not None:
+                cluster_ccfs.setdefault(c, np.zeros((n_samples, 101)))
+                cluster_ccfs[c] += np.log(mut.ccf_dist + 1e-10)
+        for c in cluster_ccfs:
+            cluster_ccfs[c] = np.exp(cluster_ccfs[c] - logsumexp(cluster_ccfs[c]))
+        return cluster_ccfs
 
     def time_events(self):
         """
@@ -147,11 +197,13 @@ class TimingEngine(object):
             for mut in self.mutations.values():
                 if mut.is_clonal:
                     mut.get_pi_dist(self.WGD)
-            for cn_event_name in self.truncal_cn_events:
-                for cn_event in self.truncal_cn_events[cn_event_name]:
-                    if cn_event.Type.endswith('gain'):
+            for cn_event_name in self.all_cn_events:
+                for cn_event in self.all_cn_events[cn_event_name]:
+                    if not cn_event.is_clonal:
+                        cn_event.pi_dist = subclonal_dist
+                    elif cn_event.Type.endswith('gain'):
                         cn_event.get_pi_dist_for_higher_gain(self.WGD)
-                    if cn_event.Type.endswith('loss'):
+                    elif cn_event.Type.endswith('loss'):
                         cn_event.get_pi_dist_for_loss(self.WGD)
         else:
             for cn_event_name in self.all_cn_events:
@@ -230,9 +282,9 @@ class TimingSample(object):
                 else:
                     local_cn_a1 = np.nan
                     local_cn_a2 = np.nan
-                ccf_hat = sum(np.linspace(0, 1, 101) * mut.ccf_1d)
                 timing_mut = TimingMut([self], mut.gene, mut.chrN, mut.pos, mut.alt, mut.ref, mut.alt_cnt, mut.ref_cnt,
-                                       local_cn_a1, local_cn_a2, ccf_hat, prot_change=mut.prot_change)
+                                       np.array([local_cn_a1]), np.array([local_cn_a2]), mut.ccf_1d,
+                                       prot_change=mut.prot_change, cluster_assignment=mut.cluster_assignment)
                 if not np.isnan(local_cn_a1) and not np.isnan(local_cn_a2):
                     timing_mut.get_mult_dist()
                 if concordant_muts is None:
@@ -302,31 +354,33 @@ class TimingSample(object):
         """
         call WGD for a sample by looking at supporting (0/2 and 2/2) regions
         """
-        #TODO: filter outlier pi distributions
-        #TODO: use 1/2 regions as supporting states as well
+        # TODO: filter outlier pi distributions
         regions_supporting_WGD = []
         regions_both_arms_gained = []
+        supporting_arm_states = []
         if use_concordant_states:
             if self.WGD is None:
                 return
             for cn_state in self.concordant_cn_states.values():
                 if cn_state.cn_a1 == 0 or cn_state.cn_a1 >= 2 and cn_state.cn_a2 >= 2:  # region supports WGD if 0/2 or 2/2
-                    regions_supporting_WGD.append(TimingCNState([self], cn_state.chrN, cn_state.arm,
+                    supporting_arm_states.append(TimingCNState([self], cn_state.chrN, cn_state.arm,
                         (cn_state.cn_a1, cn_state.cn_a2), cn_state.purity, supporting_muts=cn_state.supporting_muts))
-            self.concordant_WGD = TimingWGD(supporting_arm_states=regions_supporting_WGD)
+            self.concordant_WGD = TimingWGD(supporting_arm_states=supporting_arm_states)
             for cn_state in self.concordant_cn_states.values():
                 cn_state.call_events(wgd=True)
         else:
             for cn_state in self.cn_states.values():
+                if cn_state.cn_a2 >= 2:
+                    supporting_arm_states.append(cn_state)
                 if cn_state.cn_a1 == 0 or cn_state.cn_a1 >= 2 and cn_state.cn_a2 >= 2:  # region supports WGD if 0/2 or 2/2
                     regions_supporting_WGD.append(cn_state)
                 if cn_state.cn_a1 >= 2 and cn_state.cn_a2 >= 2:
                     regions_both_arms_gained.append(cn_state)
             if len(regions_both_arms_gained) >= 5 or len(regions_supporting_WGD) >= (
                     len(self.arm_regions) - len(self.missing_arms)) * .5:
-                regions_supporting_WGD = [TimingCNState([self], s.chrN, s.arm, (s.cn_a1, s.cn_a2), s.purity, supporting_muts=s.supporting_muts) for
-                                          s in regions_supporting_WGD]
-                self.WGD = TimingWGD(supporting_arm_states=regions_supporting_WGD)
+                supporting_arm_states = [TimingCNState([self], s.chrN, s.arm, (s.cn_a1, s.cn_a2), s.purity, supporting_muts=s.supporting_muts) for
+                                         s in supporting_arm_states]
+                self.WGD = TimingWGD(supporting_arm_states=supporting_arm_states)
                 for cn_state in self.cn_states.values():
                     cn_state.call_events(wgd=True)
 
@@ -409,30 +463,42 @@ class TimingCNState(object):
             if self.cn_a1 == 1.:  # for 1/2 even if event happened last p2 should not exceed .5
                 return np.linspace(0, .5, 101)
 
-    def call_events(self, cn_type_prefix='Arm', wgd=False, truncal=True):
+    def call_events(self, cn_type_prefix='Arm', wgd=False):
         """
         create cn event instances for events (gain for 1/2, gain and loss for 0/2, two gains for 2/2)
         """
         self.cn_events = []
         baseline = 2. if wgd else 1.
-        if self.cn_a1 != baseline:
+        if baseline - 1 <= self.cn_a1 < baseline:
+            cn_a1 = baseline - 1
+        elif baseline < self.cn_a1 <= baseline + 1:
+            cn_a1 = baseline + 1
+        else:
+            cn_a1 = round(self.cn_a1)
+        if baseline - 1 <= self.cn_a2 < baseline:
+            cn_a2 = baseline - 1
+        elif baseline < self.cn_a2 <= baseline + 1:
+            cn_a2 = baseline + 1
+        else:
+            cn_a2 = round(self.cn_a2)
+        if cn_a1 != baseline:
             cn_type = cn_type_prefix + ('_gain' if self.cn_a1 > baseline else '_loss')
-            is_clonal = truncal and self.cn_a1 >= baseline + 1 or self.cn_a1 <= baseline - 1
+            ccf_hat = min(self.cn_a1 - baseline, 1.) if self.cn_a1 > baseline else min(baseline - self.cn_a1, 1.)
             self.cn_events.append(TimingCNEvent(self.sample_list, self, Type=cn_type, chrN=self.chrN, arm=self.arm,
-                                                copy_number=str(self.cn_a1) + '/' + str(self.cn_a2), allelic_cn=self.cn_a1,
-                                                supporting_muts=self.supporting_muts, is_clonal=is_clonal))
+                                                copy_number=str(cn_a1) + '/' + str(cn_a2), allelic_cn=cn_a1,
+                                                supporting_muts=self.supporting_muts, ccf_hat=ccf_hat))
         if self.cn_a2 != baseline:
             cn_type = cn_type_prefix + ('_gain' if self.cn_a2 > baseline else '_loss')
-            is_clonal = truncal and self.cn_a2 >= baseline + 1 or self.cn_a2 <= baseline - 1
+            ccf_hat = min(self.cn_a2 - baseline, 1.) if self.cn_a2 > baseline else min(baseline - self.cn_a2, 1.)
             self.cn_events.append(TimingCNEvent(self.sample_list, self, Type=cn_type, chrN=self.chrN, arm=self.arm,
-                                                copy_number=str(self.cn_a1) + '/' + str(self.cn_a2), allelic_cn=self.cn_a2,
-                                                supporting_muts=self.supporting_muts, is_clonal=is_clonal))
+                                                copy_number=str(cn_a1) + '/' + str(cn_a2), allelic_cn=cn_a2,
+                                                supporting_muts=self.supporting_muts, ccf_hat=ccf_hat))
 
 
 class TimingCNEvent(object):
     def __init__(self, sample_list, state, Type=None, chrN=None, arm=None, pi_dist=None, copy_number=None,
                  allelic_cn=None, supporting_muts=None, is_clonal=None, cluster_id=None,
-                 cn_state_whitelist=_cn_state_whitelist):
+                 cn_state_whitelist=_cn_state_whitelist, ccf_hat=None):
         self.sample_list = sample_list
         self.state = state
         self.Type = Type
@@ -449,6 +515,7 @@ class TimingCNEvent(object):
         self.cluster_id = cluster_id
         self.cn_state_whitelist = cn_state_whitelist
         self.gain = None
+        self.ccf_hat = ccf_hat
 
     def __repr__(self):
         return '<TimingCNEvent object: {}_{}{}>'.format(self.Type, self.chrN, self.arm)
@@ -557,7 +624,7 @@ class TimingCNEvent(object):
         while len(coverage_list) < n_iter:
             random.shuffle(muts_list)
             for mut in muts_list:
-                coverage_list.append(mut.ref_cnt + mut.alt_cnt)
+                coverage_list.append(int(mut.ref_cnt + mut.alt_cnt))
         purity = np.array(self.state.purity)
         p2_simulated = []
         for p2 in np.linspace(0, 1, 101):
@@ -572,7 +639,10 @@ class TimingCNEvent(object):
                 ccf_mode = af_mode * (2 * (1 - purity) + purity * self.total_cn) / purity
                 if all(ccf_mode >= .86) and all(alt_count >= 3):
                     n_detected_by_mult[mult] += 1.
-            p2_simulated.append(n_detected_by_mult[2] / (n_detected_by_mult[1] + n_detected_by_mult[2]))
+            if n_detected_by_mult[1] == 0. and n_detected_by_mult[2] == 0.:
+                p2_simulated.append(0.)
+            else:
+                p2_simulated.append(n_detected_by_mult[2] / (n_detected_by_mult[1] + n_detected_by_mult[2]))
         return np.array(p2_simulated)
 
     def get_pi_dist_for_loss(self, WGD):
@@ -614,8 +684,8 @@ class TimingMut(object):
     """
     Class for storing information on snps and indels and for getting multiplicity likelihood distributions
     """
-    def __init__(self, sample_list, gene, chrN, pos, alt, ref, alt_cnt, ref_cnt, local_cn_a1, local_cn_a2, ccf_hat,
-                 prot_change=None, pi_dist=None, is_clonal=None, clonal_cutoff=.86):
+    def __init__(self, sample_list, gene, chrN, pos, alt, ref, alt_cnt, ref_cnt, local_cn_a1, local_cn_a2, ccf_dist,
+                 prot_change=None, pi_dist=None, is_clonal=None, clonal_cutoff=.86, cluster_assignment=None):
         self.sample_list = sample_list
         self.gene = gene
         self.chrN = chrN
@@ -626,9 +696,15 @@ class TimingMut(object):
         self.ref_cnt = ref_cnt
         self.local_cn_a1 = local_cn_a1
         self.local_cn_a2 = local_cn_a2
-        self.ccf_hat = ccf_hat
+        self.ccf_dist = ccf_dist
+        self.cluster_assignment = cluster_assignment
+        bins = np.linspace(0, 1, 101)
+        ccf_hat = sum(bins * self.ccf_dist)
         if is_clonal is None:
-            self.is_clonal = all(self.ccf_hat > clonal_cutoff) if isinstance(self.ccf_hat, np.ndarray) else self.ccf_hat > clonal_cutoff
+            if self.cluster_assignment is None:
+                self.is_clonal = all(ccf_hat > clonal_cutoff) if isinstance(ccf_hat, np.ndarray) else ccf_hat > clonal_cutoff
+            else:
+                self.is_clonal = self.cluster_assignment == 1
         else:
             self.is_clonal = is_clonal
         self.prot_change = prot_change
@@ -665,7 +741,7 @@ class TimingMut(object):
         n = self.alt_cnt + self.ref_cnt
         k = self.alt_cnt
         purity = np.array([sample.purity for sample in self.sample_list])  # ND mutation
-        for m in range(1, int(self.local_cn_a2) + 1):
+        for m in range(1, int(max(self.local_cn_a2)) + 1):
             # expected allele fraction from multiplicity, purity, and copy number
             p = (m * purity) / ((self.local_cn_a1 + self.local_cn_a2) * purity + (2 * (1 - purity)))
             mult_lik_dict[m] = scipy.stats.binom.pmf(k, n, p)
@@ -684,17 +760,25 @@ class TimingMut(object):
         """
         if matched_gain.pi_dist is None:
             return
+        cn_a1 = np.unique(self.local_cn_a1)
+        cn_a2 = np.unique(self.local_cn_a2)
+        if len(cn_a1) > 1 or len(cn_a2) > 1:
+            return
+        cn_a1 = cn_a1[0]
+        cn_a2 = cn_a2[0]
         if not self.mult_lik_dict:
             self.get_mult_dist()
-        if self.local_cn_a1 == 1. and self.local_cn_a2 == 2.:
-            bins = np.linspace(0., 1., 101)
-            mean_pi = sum(bins * matched_gain.pi_dist)
-            weighted_mean_pi = mean_pi / (mean_pi + sum(2 * (1 - bins) * matched_gain.pi_dist))
-            lik_before_gain = self.mult_lik_dict[1] * weighted_mean_pi + self.mult_lik_dict[2]
-            lik_after_gain = self.mult_lik_dict[1] * (1 - weighted_mean_pi)
-        elif self.local_cn_a1 in (0., 2.) and self.local_cn_a2 == 2.:
-            lik_before_gain = self.mult_lik_dict[2]
-            lik_after_gain = self.mult_lik_dict[1]
+        if not self.mult_lik_dict:
+            return
+        if cn_a1 == 0. and cn_a2 >= 2. or cn_a1 == cn_a2 != 1.:
+            max_cn = int(cn_a2)
+            lik_before_gain = sum(self.mult_lik_dict[i] * i / max_cn for i in range(2, max_cn + 1))
+            lik_after_gain = sum(self.mult_lik_dict[i] * (max_cn - i) / max_cn for i in range(2, max_cn)) \
+                + self.mult_lik_dict[1]
+        elif cn_a1 == 1. and cn_a2 >= 2.:
+            max_cn = int(cn_a2)
+            lik_before_gain = sum(self.mult_lik_dict[i] * i / max_cn for i in range(1, max_cn + 1))
+            lik_after_gain = sum(self.mult_lik_dict[i] * (max_cn - i) / max_cn for i in range(1, max_cn))
         else:
             return
         total_lik = lik_before_gain + lik_after_gain
@@ -707,6 +791,12 @@ class TimingMut(object):
         self.pi_dist = np.exp(pi_dist - logsumexp(pi_dist))
 
     def get_mult_dist(self):
-        if self.local_cn_a1 in (0., 1., 2.) and self.local_cn_a2 == 2.:
-            self.mult_lik_dict = self.get_multiplicity_likelihoods()
+        cn_a1 = np.unique(self.local_cn_a1)
+        cn_a2 = np.unique(self.local_cn_a2)
+        if len(cn_a1) > 1 or len(cn_a2) > 1 or np.isnan(cn_a1[0]) or np.isnan(cn_a2[0]):
+            return
+        cn_a1 = cn_a1[0]
+        cn_a2 = cn_a2[0]
+        self.mult_lik_dict = self.get_multiplicity_likelihoods()
+        if cn_a1 in (0., 1., 2.) and cn_a2 == 2.:
             self.log_mult_dist = self.get_log_mult_1_2_distribution()
