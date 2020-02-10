@@ -542,7 +542,7 @@ class TimingCNEvent(object):
         log_p2_posterior = np.zeros(101)
         for mut in self.supporting_muts:  # multiply mutation p2 distributions to get cnv p2 distribution
             mut_p2_dist = np.zeros(101)
-            if mut.local_cn_a1 == self.cn_a1 and mut.local_cn_a2 == self.cn_a2 and mut.is_clonal:
+            if (mut.local_cn_a1 == self.cn_a1).all() and (mut.local_cn_a2 == self.cn_a2).all() and mut.is_clonal:
                 if mut.log_mult_dist is None:
                     mut.get_mult_dist()
                 mut_p2_dist += np.sum(mut.log_mult_dist, 1)
@@ -624,7 +624,11 @@ class TimingCNEvent(object):
         while len(coverage_list) < n_iter:
             random.shuffle(muts_list)
             for mut in muts_list:
-                coverage_list.append(int(mut.ref_cnt + mut.alt_cnt))
+                coverage = mut.ref_cnt + mut.alt_cnt
+                if hasattr(coverage, '__iter__'):
+                    coverage_list.append(coverage.astype(int))
+                else:
+                    coverage_list.append(int(coverage))
         purity = np.array(self.state.purity)
         p2_simulated = []
         for p2 in np.linspace(0, 1, 101):
