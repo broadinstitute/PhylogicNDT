@@ -46,7 +46,7 @@ class PhylogicOutput(object):
         n_muts = dict.fromkeys(range(1, len(results.clust_CCF_dens) + 1), 0)
         c_drivers = {c: [] for c in range(1, len(results.clust_CCF_dens) + 1)}
         for i, sample in enumerate(patient.sample_list):
-            for mut in itertools.chain(sample.mutations, sample.low_coverage_mutations.values()):
+            for mut in sample.concordant_variants:
                 if hasattr(mut, 'cluster_assignment') and mut.cluster_assignment:
                     c = mut.cluster_assignment
                     if mut.type == 'CNV':
