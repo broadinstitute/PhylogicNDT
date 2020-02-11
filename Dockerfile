@@ -13,6 +13,8 @@ COPY PhylogicSim /phylogicndt/PhylogicSim
 COPY GrowthKinetics /phylogicndt/GrowthKinetics
 COPY BuildTree /phylogicndt/BuildTree
 COPY Cluster /phylogicndt/Cluster
+COPY SinglePatientTiming /phylogicndt/SinglePatientTiming
+COPY LeagueModel /phylogicndt/LeagueModel
 COPY data /phylogicndt/data
 COPY ExampleData /phylogicndt/ExampleData
 COPY ExampleRuns /phylogicndt/ExampleRuns
