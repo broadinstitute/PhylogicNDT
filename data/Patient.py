@@ -284,7 +284,7 @@ class Patient:
                                              sample.sample_name, mut, mut.var_str)
                                 mis_sample.concordant_variants.append(
                                     SomMutation.from_som_mutation_zero(mut, from_sample=mis_sample))
-                                mis_sample._mut_varstring_hastable[mut.var_str] = mis_sample.concordant_variants[-1]
+                                mis_sample._mut_varstring_hashtable[mut.var_str] = mis_sample.concordant_variants[-1]
                         sample.concordant_variants.append(mut)
 
                     else:

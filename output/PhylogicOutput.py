@@ -46,7 +46,7 @@ class PhylogicOutput(object):
         n_muts = dict.fromkeys(range(1, len(results.clust_CCF_dens) + 1), 0)
         c_drivers = {c: [] for c in range(1, len(results.clust_CCF_dens) + 1)}
         for i, sample in enumerate(patient.sample_list):
-            for mut in itertools.chain(sample.mutations, sample.low_coverage_mutations.values()):
+            for mut in sample.concordant_variants:
                 if hasattr(mut, 'cluster_assignment') and mut.cluster_assignment:
                     c = mut.cluster_assignment
                     if mut.type == 'CNV':
@@ -57,7 +57,7 @@ class PhylogicOutput(object):
                         mut_name = ':'.join((mut.gene, str(mut.pos), mut.ref, mut.alt))
                     else:
                         mut_name = ':'.join((str(mut.chrN), str(mut.pos), mut.ref, mut.alt))
-                    ccf_hat, ccf_high, ccf_low = self._get_mean_high_low(mut.ccf_1d)
+                    ccf_hat, ccf_high, ccf_low = self._get_mean_high_low(mut.ccf_1d.astype(float))
                     alt_cnt = mut.alt_cnt
                     ref_cnt = mut.ref_cnt
                     if mut.type != 'CNV':
@@ -884,9 +884,9 @@ class PhylogicOutput(object):
         with open('{}.mut_ccfs.txt'.format(patient.indiv_name), 'w') as f:
             f.write('\t'.join(header))
             for i, sample in enumerate(patient.sample_list):
-                for mut in itertools.chain(sample.mutations, sample.low_coverage_mutations.values()):
+                for mut in sample.concordant_variants:
                     if mut.type != 'CNV' and hasattr(mut, 'cluster_assignment') and mut.cluster_assignment is not None:
-                        mut_mean, mut_high, mut_low = self._get_mean_high_low(np.array(mut.ccf_1d))
+                        mut_mean, mut_high, mut_low = self._get_mean_high_low(np.array(mut.ccf_1d).astype(float))
                         c = mut.cluster_assignment
                         clust_mean, clust_high, clust_low = self._get_mean_high_low((np.array(cluster_ccfs[c][i])))
                         line = [patient.indiv_name, sample.sample_name, aliases[i], mut.gene if mut.gene else 'Unknown',
