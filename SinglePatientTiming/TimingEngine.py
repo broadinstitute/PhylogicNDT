@@ -144,7 +144,7 @@ class TimingEngine(object):
                     cn_a1[i] = sample[mut_varstr].local_cn_a1
                     cn_a2[i] = sample[mut_varstr].local_cn_a2
                 nd_mut = TimingMut(self.sample_list, mut.gene, mut.chrN, mut.pos, mut.alt, mut.ref, alt_cnt,
-                                   ref_cnt, mut.local_cn_a1, mut.local_cn_a2, ccf_dist, prot_change=mut.prot_change,
+                                   ref_cnt, cn_a1, cn_a2, ccf_dist, prot_change=mut.prot_change,
                                    cluster_assignment=mut.cluster_assignment)
                 self.mutations[mut_varstr] = nd_mut
 
