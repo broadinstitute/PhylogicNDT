@@ -124,7 +124,7 @@ class TumorSample:
             mut_with_ccf_dat = self._read_absolute_results(filen)
         elif input_type == 'tab':
             mut_with_ccf_dat = self._read_ccf_from_txt(filen)
-        elif input_type == 'calc_ccf':
+        elif input_type == 'calc_ccf': # TODO: implement this
             # when only abs CN and ref/alt counts present
             raise NotImplementedError("Please provide precomputed raw ccf values!")
         elif input_type == 'sqlite':

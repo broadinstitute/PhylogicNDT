@@ -57,7 +57,7 @@ class PhylogicOutput(object):
                         mut_name = ':'.join((mut.gene, str(mut.pos), mut.ref, mut.alt))
                     else:
                         mut_name = ':'.join((str(mut.chrN), str(mut.pos), mut.ref, mut.alt))
-                    ccf_hat, ccf_high, ccf_low = self._get_mean_high_low(mut.ccf_1d.astype(float))
+                    ccf_hat, ccf_high, ccf_low = self._get_mean_high_low(np.array(mut.ccf_1d).astype(float))
                     alt_cnt = mut.alt_cnt
                     ref_cnt = mut.ref_cnt
                     if mut.type != 'CNV':
