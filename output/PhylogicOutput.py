@@ -13,6 +13,7 @@ import scipy.stats
 import random
 import math
 import re
+import networkx as nx
 
 import matplotlib
 
@@ -1056,14 +1057,6 @@ class PhylogicOutput(object):
                     line = [indiv_id, sample_id, population, str(abundance)]
                     writer.write('\t'.join(line) + '\n')
 
-    def draw_timing_plot(self):
-        """
-
-        Returns:
-
-        """
-        raise NotImplementedError
-
     def write_timing_tsv(self, timing_engine):
         """
 
@@ -1125,7 +1118,6 @@ class PhylogicOutput(object):
                         line.extend(pi_dist)
                         f.write('\n' + '\t'.join(map(str, line)))
 
-
     @staticmethod
     def write_comp_table(indiv_id, comps):
         with open(indiv_id + '.comp.tsv', 'w') as f:
@@ -1135,11 +1127,198 @@ class PhylogicOutput(object):
                 eve1, eve2 = eve_pair
                 f.write('\n' + '\t'.join(map(str, [indiv_id, eve1, eve2, p1_2, p2_1, p_unknown])))
 
+    def draw_timing_graph(self, indiv_id, comps, coincidence_thresh=.8, edge_thresh=.5, eves_per_row=2,
+                          nodes_per_layer=3, dist_between_layers=200, figsize=(8, 8)):
+        """
+        Write a png for the comparison graph
+        Args:
+            indiv_id: patient id
+            comps: comparison dict from SinglePatientTiming.compare_events
+
+        Returns: list of nodes, list of edges, dict of node positions
+
+        """
+        DG = self._get_timing_graph(comps, coincidence_thresh=coincidence_thresh, edge_thresh=edge_thresh,
+                                    eves_per_row=eves_per_row)
+        nodes = list(DG.nodes)
+        edges = list(DG.edges)
+        pos = self._get_timing_graph_coordinates(nodes, edges, nodes_per_layer=nodes_per_layer,
+                                                 dist_between_layers=dist_between_layers)
+        mpl_pos = {node: (pos[node][1], -pos[node][0]) for node in nodes}
+        plt.figure(figsize=figsize)
+        ax = plt.gca()
+        plt.axis('off')
+        nx.draw_networkx(DG, mpl_pos, ax=ax, node_size=500, font_size=10, node_color='orange')
+        xmin, xmax = ax.get_xlim()
+        xmean = (xmin + xmax) / 2
+        xwidth = xmax - xmean
+        ymin, ymax = ax.get_ylim()
+        ymean = (ymin + ymax) / 2
+        ywidth = ymax - ymean
+        ax.set_xlim(xmean - xwidth * 1.2, xmean + xwidth * 1.2)
+        ax.set_ylim(ymean - ywidth * 1.2, ymean + ywidth * 1.2)
+        ax.set_title(indiv_id + ' timing graph')
+        plt.savefig(indiv_id + '.comp_graph.png')
+        return nodes, edges, pos
 
     @staticmethod
-    def _get_timing_graph_coordinates(pi_dists, coincidence_thresh=.5, eves_per_row=2):
+    def _get_timing_graph(comps, coincidence_thresh=.8, edge_thresh=.5, eves_per_row=2):
+        """
+        Get nodes and edges from a comparison table
+        Args:
+            comps: comparison table
+            coincidence_thresh: probability threshold above which to merge events into a single node
+            edge_thresh: probability threshold above which to create a directed edge
+            eves_per_row: number of events per row in the label
 
-        return
+        Returns:
+        networkx DiGraph object
+        """
+        all_events = set(itertools.chain(*comps))
+        neighbors = {eve: set() for eve in all_events}
+        for (eve1, eve2), (p1_2, p2_1, p_unknown) in comps.items():
+            if p_unknown > coincidence_thresh:
+                neighbors[eve1].add(eve2)
+                neighbors[eve2].add(eve1)
+
+        def _BK(P, neighbors, R=frozenset(), X=frozenset()):
+            if not P and not X:
+                yield R
+            else:
+                for v in P:
+                    for r in _BK(P & neighbors[v], neighbors, R=R | {v}, X=X & neighbors[v]):
+                        yield r
+                    P = P - {v}
+                    X = X | {v}
+
+        nodes = list(_BK(all_events, neighbors))
+        DG = nx.DiGraph()
+        labels = []
+        for node in nodes:
+            label = ''
+            for i, eve in enumerate(node):
+                if i == 0:
+                    label += eve
+                elif i % eves_per_row == 0:
+                    label += '\n' + eve
+                else:
+                    label += ', ' + eve
+            labels.append(label)
+            DG.add_node(label)
+        for i1, i2 in itertools.combinations(range(len(nodes)), 2):
+            label1 = labels[i1]
+            eve1 = next(iter(nodes[i1]))
+            label2 = labels[i2]
+            eve2 = next(iter(nodes[i2]))
+            if (eve1, eve2) in comps:
+                p1_2, p2_1, p_unknown = comps[(eve1, eve2)]
+            else:
+                p2_1, p1_2, p_unknown = comps[(eve2, eve1)]
+            if p1_2 > edge_thresh:
+                DG.add_edge(label1, label2)
+            elif p2_1 > edge_thresh:
+                DG.add_edge(label2, label1)
+        for edge in list(DG.edges):
+            if len(list(nx.all_simple_paths(DG, *edge))) > 1:
+                DG.remove_edge(*edge)
+        return DG
+
+    @staticmethod
+    def _get_timing_graph_coordinates(nodes, edges, nodes_per_layer=3, dist_between_layers=200, layer_width=400):
+        """
+        Coffman-Graham algorithm for graph drawing
+        Args:
+            nodes: list of nodes
+            edges: list of edges
+            nodes_per_layer: nodes per layer
+
+        Returns:
+        dict of positions for each node
+        """
+        parent_dict = {node: [] for node in nodes}
+        child_dict = {node: [] for node in nodes}
+        for edge in edges:
+            parent_dict[edge[1]].append(edge[0])
+            child_dict[edge[0]].append(edge[1])
+        ordered_nodes = []
+        nodes_to_order = []
+        for node in nodes:
+            if parent_dict[node]:
+                nodes_to_order.append(node)
+            else:
+                ordered_nodes.append(node)
+
+        def order_nodes(node):
+            parents = parent_dict[node]
+            for parent in parents:
+                if parent not in ordered_nodes:
+                    return [-1]
+            order = []
+            for idx, ordered_node in enumerate(reversed(ordered_nodes)):
+                if ordered_node in parents:
+                    order.append(idx)
+            return order
+
+        while nodes_to_order:
+            node_idx = max(range(len(nodes_to_order)), key=lambda idx: order_nodes(nodes_to_order[idx]))
+            ordered_nodes.append(nodes_to_order.pop(node_idx))
+
+        node_layers = dict.fromkeys(nodes, 0)
+        nodes_by_layer = {}
+        for node in reversed(ordered_nodes):
+            layer = max(node_layers[child] for child in child_dict[node]) + 1 if child_dict[node] else 0
+            nodes_by_layer.setdefault(layer, [])
+            while len(nodes_by_layer[layer]) == nodes_per_layer:
+                layer += 1
+                nodes_by_layer.setdefault(layer, [])
+            node_layers[node] = layer
+            nodes_by_layer[layer].append(node)
+
+        node_positions = {}
+        for layer in nodes_by_layer:
+            nodes_on_layer = nodes_by_layer[layer]
+            n_nodes = len(nodes_on_layer)
+            for i, node in enumerate(nodes_on_layer):
+                x = -dist_between_layers * layer
+                y = (i - (n_nodes - 1) / 2.) * layer_width / (nodes_per_layer - 1)
+                node_positions[node] = (x, y)
+
+        return node_positions
+
+    def generate_html_from_timing(self, indiv_id, timing_engine, comps, drivers=()):
+        nodes, edges, pos = self.draw_timing_graph(indiv_id, comps)
+        eve_list = []
+        cnv_pi_dists = {}
+        driver_pi_dists = {}
+        if timing_engine.WGD is not None:
+            pi_mean, pi_high, pi_low = self._get_mean_high_low(timing_engine.WGD.pi_dist)
+            pi_score = '{} ({}-{})'.format(pi_mean, pi_low, pi_high)
+            eve_list.append({'Event name': 'WGD', 'Chromosome': '', 'Position': '', 'Pi score': pi_score})
+            cnv_pi_dists['WGD'] = list(timing_engine.WGD.pi_dist)
+        for eve in itertools.chain(*timing_engine.all_cn_events.values()):
+            pi_mean, pi_high, pi_low = self._get_mean_high_low(eve.pi_dist)
+            pi_score = '{} ({}-{})'.format(pi_mean, pi_low, pi_high)
+            eve_list.append({'Event name': eve.event_name, 'Chromosome': eve.chrN, 'Position': '',
+                             'Pi score': pi_score})
+            cnv_pi_dists[eve.event_name] = list(eve.pi_dist)
+        for mut in timing_engine.mutations.values():
+            pi_mean, pi_high, pi_low = self._get_mean_high_low(mut.pi_dist)
+            pi_score = '{} ({}-{})'.format(pi_mean, pi_low, pi_high)
+            eve_list.append({'Event name': mut.event_name, 'Chromosome': mut.chrN, 'Position': mut.pos,
+                             'Pi score': pi_score})
+            if mut.event_name.split('_')[0] in drivers:
+                driver_pi_dists[mut.event_name] = list(mut.pi_dist)
+        with open(os.path.dirname(__file__) + '/timing_report_template.html_', 'r') as fh_in, open(
+                indiv_id + '.phylogic_timing_report.html', 'w') as fh_out:
+            html_template = fh_in.read()
+            fh_out.write(HTMLTemplate(html_template).substitute(**{
+                'indiv_id': indiv_id,
+                'comp_graph_options': json.dumps({'nodes': nodes, 'edges': edges, 'pos': pos}),
+                'boxplot_options': json.dumps({'pi_distributions': cnv_pi_dists}),
+                'cnv_pi_histograms_options': json.dumps({'pi_distributions': cnv_pi_dists}),
+                'driver_pi_histograms_options': json.dumps({'pi_distributions': driver_pi_dists}),
+                'timing_table_options': json.dumps({'eve_list': eve_list})
+            }))
 
 
 class ClusterColors(object):
