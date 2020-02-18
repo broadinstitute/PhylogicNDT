@@ -1140,8 +1140,8 @@ class PhylogicOutput(object):
         """
         DG = self._get_timing_graph(comps, coincidence_thresh=coincidence_thresh, edge_thresh=edge_thresh,
                                     eves_per_row=eves_per_row)
-        nodes = list(DG.nodes)
-        edges = list(DG.edges)
+        nodes = list(DG.nodes())
+        edges = list(DG.edges())
         pos = self._get_timing_graph_coordinates(nodes, edges, nodes_per_layer=nodes_per_layer,
                                                  dist_between_layers=dist_between_layers)
         mpl_pos = {node: (pos[node][1], -pos[node][0]) for node in nodes}
@@ -1218,7 +1218,7 @@ class PhylogicOutput(object):
                 DG.add_edge(label1, label2)
             elif p2_1 > edge_thresh:
                 DG.add_edge(label2, label1)
-        for edge in list(DG.edges):
+        for edge in list(DG.edges()):
             if len(list(nx.all_simple_paths(DG, *edge))) > 1:
                 DG.remove_edge(*edge)
         return DG
