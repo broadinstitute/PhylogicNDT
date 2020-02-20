@@ -27,7 +27,7 @@ class Node:
 
     def __repr__(self):
         if self._data:
-            return self._identifier, [(sample_id + str(density)) for sample_id, density in self._data.iteritems()]
+            return self._identifier, [(sample_id + str(density)) for sample_id, density in self._data.items()]
         else:
             return str(self._identifier) + ''
 

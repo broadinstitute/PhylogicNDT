@@ -236,10 +236,12 @@ class Tree:
         :param node_to_move:
         :return:
         """
+        import copy
         node_to_move_parent = node_to_move.parent
+        node_to_move_children = copy.deepcopy(node_to_move.children)
         logging.debug('Node to move parent {}'.format(node_to_move.parent.identifier))
         # For every child of this node_to_move
-        for child_id in node_to_move.children:
+        for child_id in node_to_move_children:
             logging.debug('Removing edge from node {} to node {}'.format(node_to_move.identifier, child_id))
             # Remove edge from node_to_move to its child
             self.remove_edge(node_to_move, self._nodes[child_id])

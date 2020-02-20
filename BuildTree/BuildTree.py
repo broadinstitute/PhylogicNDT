@@ -33,9 +33,8 @@ def run_tool(args):
     # Computing Cell Population
     cp_engine = CellPopulationEngine(patient_data, seed=args.seed)
     constrained_ccf = cp_engine.compute_constrained_ccf(n_iter=args.n_iter)
-
-    cell_abundance = cp_engine.get_cell_abundance_across_samples(constrained_ccf)
-
+    cell_abundance = cp_engine.get_cell_abundance_across_samples(constrained_ccf)    
+    
     phylogicoutput.write_all_cell_abundances(cp_engine.get_all_cell_abundances(), args.indiv_id)
     cell_ancestry = bt_engine.get_cell_ancestry()
     phylogicoutput.write_constrained_ccf_tsv(constrained_ccf, cell_ancestry, args.indiv_id)
