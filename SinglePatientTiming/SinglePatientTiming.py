@@ -55,6 +55,7 @@ def run_tool(args):
         driver_genes = [line.strip() for line in f]
     comps = compare_events(timing_engine, drivers=driver_genes)
     phylogicoutput.write_comp_table(args.indiv_id, comps)
+    # phylogicoutput.generate_html_from_timing(args.indiv_id, timing_engine, comps, drivers=driver_genes)
 
 
 def compare_events(timing_engine, drivers=()):

@@ -124,7 +124,7 @@ class TumorSample:
             mut_with_ccf_dat = self._read_absolute_results(filen)
         elif input_type == 'tab':
             mut_with_ccf_dat = self._read_ccf_from_txt(filen)
-        elif input_type == 'calc_ccf':
+        elif input_type == 'calc_ccf': # TODO: implement this
             # when only abs CN and ref/alt counts present
             raise NotImplementedError("Please provide precomputed raw ccf values!")
         elif input_type == 'sqlite':
@@ -403,16 +403,16 @@ class TumorSample:
                     try:
                         row = dict(zip(header, line.strip('\n').split('\t')))
                         chrN = row['Chromosome']
-                        start = int(row['Start.bp'])
-                        end = int(row['End.bp'])
+                        start = int(float(row['Start.bp']))
+                        end = int(float(row['End.bp']))
                         ccf_hat_a1 = float(row['cancer.cell.frac.a1'])
                         ccf_high_a1 = float(row['ccf.ci95.high.a1'])
                         ccf_low_a1 = float(row['ccf.ci95.low.a1'])
                         ccf_hat_a2 = float(row['cancer.cell.frac.a2'])
                         ccf_high_a2 = float(row['ccf.ci95.high.a2'])
                         ccf_low_a2 = float(row['ccf.ci95.low.a2'])
-                        local_cn_a1 = int(row['modal.a1'])
-                        local_cn_a2 = int(row['modal.a2'])
+                        local_cn_a1 = int(float(row['modal.a1']))
+                        local_cn_a2 = int(float(row['modal.a2']))
                         seg_tree[chrN].add(Interval(start, end,
                                                     (self.sample_name, {'cn_a1': local_cn_a1, 'cn_a2': local_cn_a2,
                                                                         'ccf_hat_a1': ccf_hat_a1,
@@ -430,8 +430,8 @@ class TumorSample:
                     try:
                         row = dict(zip(header, line.strip('\n').split('\t')))
                         chrN = row['Chromosome']
-                        start = int(row['Start'])
-                        end = int(row['End'])
+                        start = int(float(row['Start']))
+                        end = int(float(row['End']))
                         cn_a1 = float(row['A1.Seg.CN'])
                         cn_a2 = float(row['A2.Seg.CN'])
                         seg_tree[chrN].add(Interval(start, end, (self.sample_name, {'cn_a1': cn_a1, 'cn_a2': cn_a2})))

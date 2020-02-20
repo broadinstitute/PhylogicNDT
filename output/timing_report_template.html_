@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+<head>
+  <title>@@indiv_id Phylogic Timing Report</title>
+  <script src="https://code.jquery.com/jquery-1.10.2.js"></script>
+  <script src="https://code.jquery.com/ui/1.10.4/jquery-ui.js"></script>
+  <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.10.19/css/jquery.dataTables.css">
+  <script type="text/javascript" charset="utf8" src="https://cdn.datatables.net/1.10.19/js/jquery.dataTables.js"></script>
+  <script src="https://d3js.org/d3.v5.js"></script>
+  <link rel="stylesheet" type="text/css" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+  <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js" integrity="sha384-JjSmVgyd0p3pXB1rRibZUAYoIIy6OrQ6VrjIEaFf/nJGzIxFDsf4x0xIM+B07jRM" crossorigin="anonymous"></script>
+</head>
+
+<body>
+  <main>
+    <div class="container-fluid">
+      <div class="row">
+        <h2 class="ml-3">Phylogic Timing Results - @@indiv_id</h2>
+      </div>
+      <div class="card">
+        <div id="headingOne" class="card-header">
+          <h5 class="mb-0">
+            <button class="btn btn-link" data-toggle="collapse" data-target="#collapseOne" aria-expanded="true" aria-controls="collapseOne">
+              Timing graph
+            </button>
+          </h5>
+        </div>
+        <div id="collapseOne" class="collapse show" aria-labelledby="headingOne">
+          <div class="card-body">
+            <div class="row">
+              <div id="timing-graph" style="width: 100%; display: block"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div id="headingTwo" class="card-header">
+          <h5 class="mb-0">
+            <button class="btn btn-link" data-toggle="collapse" data-target="#collapseTwo" aria-expanded="true" aria-controls="collapseTwo">
+              CNV boxplot
+            </button>
+          </h5>
+        </div>
+        <div id="collapseTwo" class="collapse show" aria-labelledby="headingTwo">
+          <div class="card-body">
+            <div id="cnv-pi-boxplot" style="display:block; justify-content: center"></div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div id="headingThree" class="card-header">
+          <h5 class="mb-0">
+            <button class="btn btn-link" data-toggle="collapse" data-target="#collapseThree" aria-expanded="true" aria-controls="collapseThree">
+              CNV timing histograms
+            </button>
+          </h5>
+        </div>
+        <div id="collapseThree" class="collapse hide" aria-labelledby="headingThree">
+          <div class="card-body">
+            <div id="cnv-pi-histograms-container" style="display:flex; flex-wrap: wrap; justify-content: center"></div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div id="headingFour" class="card-header">
+          <h5 class="mb-0">
+            <button class="btn btn-link" data-toggle="collapse" data-target="#collapseFour" aria-expanded="true" aria-controls="collapseFour">
+              Driver mutations timing histograms
+            </button>
+          </h5>
+        </div>
+        <div id="collapseFour" class="collapse hide" aria-labelledby="headingFour">
+          <div class="card-body">
+            <div id="driver-pi-histograms-container" style="display:flex; flex-wrap: wrap; justify-content: center"></div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div id="headingFive" class="card-header">
+          <h5 class="mb-0">
+            <button class="btn btn-link" data-toggle="collapse" data-target="#collapseFive" aria-expanded="true" aria-controls="collapseFive">
+              Timing table
+            </button>
+          </h5>
+        </div>
+        <div id="collapseFive" class="collapse show" aria-labelledby="headingFive">
+          <div class="card-body">
+            <div class="row">
+              <div id="event-pi-table" class="col-md-12"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="row" style="padding-bottom: 50px"></div>
+    </div>
+  </main>
+  <script>
+    $(function() {
+      $.widget("PhylogicTiming.comp_graph", {
+
+        options: {
+          nodes: [],
+          edges: [],
+          pos: {}
+        },
+
+        _create: function() {
+          let nodes = this.options.nodes,
+            edges = this.options.edges,
+            pos = this.options.pos,
+            width = -Math.min(...Object.values(pos).map(d => d[0])) * 1.5,
+            height = Math.max(...Object.values(pos).map(d => d[1])) * 3;
+
+          let comp_graph = d3.select(this.element.context).append("svg")
+            .attr("baseProfile", "full")
+            .attr("viewBox", [-width + (width / 7.5), -height / 2, width, height].join(" "))
+            .attr("version", "1.1")
+            .attr("xmlns", "http://www.w3.org/2000/svg")
+            .attr("xmlns:ev", "http://www.w3.org/2001/xml-events")
+            .attr("xmlns:xlink", "http://www.w3.org/1999/xlink")
+            .attr("max-height", "500px");
+          let node_container = comp_graph.append("g");
+          node_container.selectAll("circle")
+            .data(nodes)
+            .join("circle")
+            .attr("cx", d => pos[d][0])
+            .attr("cy", d => pos[d][1])
+            .attr("r", 24)
+            .attr("stroke", "none")
+            .attr("fill", "blue")
+            .attr("opacity", 0.4);
+          let edge_container = comp_graph.append("g");
+          edge_container.append("defs").append("marker")
+            .attr("id", "arrow")
+            .attr("markerWidth", 10)
+            .attr("markerHeight", 10)
+            .attr("refX", 0)
+            .attr("refY", 0)
+            .attr("orient", "auto")
+            .attr("markerUnits", "strokeWidth")
+            .attr("viewBox", "-10 -10 20 20")
+            .append("path")
+            .attr("d", "M0,0 L-9,-3 L-9,3 z")
+            .attr("stroke", "black");
+          let edge_x_components = edges.map(d => pos[d[1]][0] - pos[d[0]][0]),
+            edge_y_components = edges.map(d => pos[d[1]][1] - pos[d[0]][1]),
+            edge_lengths = edges.map((_, i) => Math.sqrt((edge_x_components[i] ** 2) + (edge_y_components[i] ** 2)));
+          edge_container
+            .selectAll("line")
+            .data(edges)
+            .join("line")
+            .attr("x1", (d, i) => pos[d[0]][0] + (edge_x_components[i] / edge_lengths[i] * 24))
+            .attr("x2", (d, i) => pos[d[1]][0] - (edge_x_components[i] / edge_lengths[i] * 24))
+            .attr("y1", (d, i) => pos[d[0]][1] + (edge_y_components[i] / edge_lengths[i] * 24))
+            .attr("y2", (d, i) => pos[d[1]][1] - (edge_y_components[i] / edge_lengths[i] * 24))
+            .attr("stroke", "black")
+            .attr("stroke-width", 2)
+            .attr("marker-end", "url(#arrow)");
+          let labels = nodes.map(d => d.split("\n"));
+          let label_container = comp_graph.append("g");
+          for (let i in nodes) {
+            label_container.append("text")
+              .attr("y", pos[nodes[i]][1] - (labels[i].length * 5))
+              .attr("text-anchor", "middle")
+              .attr("font-size", 10)
+              .attr("font-weight", "bold")
+              .selectAll("tspan")
+              .data(labels[i])
+              .join("tspan")
+              .attr("x", pos[nodes[i]][0])
+              .attr("dy", 10)
+              .text(d => d)
+          }
+        }
+      });
+
+      $("#timing-graph").comp_graph(@@comp_graph_options)
+    })
+  </script>
+  <script>
+    $(function() {
+      $.widget("PhylogicTiming.cnv_boxplot", {
+
+        options: {
+          pi_distributions: {}
+        },
+
+        _create: function() {
+          let pi_distributions = this.options.pi_distributions,
+            left_margin = 40,
+            right_margin = 20,
+            top_margin = 40,
+            bottom_margin = 40,
+            width = 1080,
+            height = 400;
+
+          let x = d3.scaleLinear()
+            .domain([-1, 46])
+            .range([left_margin, width - right_margin]);
+          let y = d3.scaleLinear()
+            .domain([0, 1])
+            .range([height - bottom_margin, top_margin]);
+
+          let gain_boxplot = d3.select(this.element.context).append("svg")
+            .attr("baseProfile", "full")
+            .attr("viewBox", "0 0 " + width + " " + height)
+            .attr("version", "1.1")
+            .attr("xmlns", "http://www.w3.org/2000/svg")
+            .attr("xmlns:ev", "http://www.w3.org/2001/xml-events")
+            .attr("xmlns:xlink", "http://www.w3.org/1999/xlink")
+            .attr("max-height", "400px")
+            .attr("id", "gain-boxplot");
+          gain_boxplot.append("g")
+            .call(g => g
+              .attr("transform", "translate(0 " + (height - bottom_margin) + ")")
+              .call(d3.axisBottom(x).tickValues([...Array(46).keys()])
+                .tickFormat(d => (d >= 44 ? "X" : Math.floor((d + 2) / 2)) + (d % 2 ? "q" : "p"))
+              )
+            );
+          gain_boxplot.append("g")
+            .call(g => g
+              .attr("transform", "translate(" + left_margin + " 0)")
+              .call(d3.axisLeft(y)));
+          gain_boxplot.append("text")
+            .attr("x", (width + left_margin - right_margin) / 2)
+            .attr("y", 16)
+            .attr("text-anchor", "middle")
+            .attr("font-size", "16px")
+            .text("Timing scores of chromosome arm gains");
+
+          let loss_boxplot = d3.select(this.element.context).append("svg")
+            .attr("baseProfile", "full")
+            .attr("viewBox", "0 0 " + width + " " + height)
+            .attr("version", "1.1")
+            .attr("xmlns", "http://www.w3.org/2000/svg")
+            .attr("xmlns:ev", "http://www.w3.org/2001/xml-events")
+            .attr("xmlns:xlink", "http://www.w3.org/1999/xlink")
+            .attr("max-height", "400px")
+            .attr("id", "loss-boxplot");
+          loss_boxplot.append("g")
+            .call(g => g
+              .attr("transform", "translate(0 " + (height - bottom_margin) + ")")
+              .call(d3.axisBottom(x).tickValues([...Array(46).keys()])
+                .tickFormat(d => (d >= 44 ? "X" : Math.floor((d + 2) / 2)) + (d % 2 ? "q" : "p"))
+              )
+            );
+          loss_boxplot.append("g")
+            .call(g => g
+              .attr("transform", "translate(" + left_margin + " 0)")
+              .call(d3.axisLeft(y)));
+          loss_boxplot.append("text")
+            .attr("x", (width + left_margin - right_margin) / 2)
+            .attr("y", 16)
+            .attr("text-anchor", "middle")
+            .attr("font-size", "16px")
+            .text("Timing scores of chromosome arm losses");
+
+          let get_quartiles = function(dist) {
+            let lower_quartile,
+              median,
+              upper_quartile,
+              area_under_curve = 0;
+            for (let p = 0; p <= 100; p ++) {
+              let next_area = area_under_curve + dist[p];
+              if (area_under_curve < 0.25 && next_area >= 0.25) {
+                lower_quartile = ((0.25 - area_under_curve) / (next_area - area_under_curve) + p - 1) / 100
+              }
+              if (area_under_curve < 0.5 && next_area >= 0.5) {
+                median = ((0.5 - area_under_curve) / (next_area - area_under_curve) + p - 1) / 100
+              }
+              if (area_under_curve < 0.75 && next_area >= 0.75) {
+                upper_quartile = ((0.75 - area_under_curve) / (next_area - area_under_curve) + p - 1) / 100;
+                break
+              }
+              area_under_curve = next_area
+            }
+            return {lower_quartile, median, upper_quartile}
+          };
+
+          let box_half_width = x(0.4) - x(0);
+
+          for (let i = 0; i <= 45; i++) {
+            let chr = i >= 44 ? "X" : Math.floor((i + 2) / 2),
+              arm = i % 2 ? "q" : "p",
+              arm_gain = "gain_" + chr + arm,
+              arm_loss = "loss_" + chr + arm;
+            if (arm_gain in pi_distributions) {
+              let pi_dist = pi_distributions[arm_gain],
+                {lower_quartile, median, upper_quartile} = get_quartiles(pi_dist),
+                iqr = upper_quartile - lower_quartile,
+                min = Math.max(lower_quartile - (1.5 * iqr), 0),
+                max = Math.min(upper_quartile + (1.5 * iqr), 1),
+                x_coord = x(i);
+              let box = gain_boxplot.append("g");
+              box.append("line")
+                .attr("x1", x_coord)
+                .attr("x2", x_coord)
+                .attr("y1", y(min))
+                .attr("y2", y(max))
+                .attr("stroke", "black");
+              box.append("rect")
+                .attr("x", x_coord - box_half_width)
+                .attr("y", y(upper_quartile))
+                .attr("height", y(lower_quartile) - y(upper_quartile))
+                .attr("width", 2 * box_half_width)
+                .attr("stroke", "black")
+                .attr("fill", "#ff69b4")
+                .attr("opacity", 0.6);
+              box.append("g")
+                .selectAll("line")
+                .data([min, median, max])
+                .join("line")
+                .attr("x1", x_coord - box_half_width)
+                .attr("x2", x_coord + box_half_width)
+                .attr("y1", d => y(d))
+                .attr("y2", d => y(d))
+                .attr("stroke", "black")
+            }
+            if (arm_loss in pi_distributions) {
+              let pi_dist = pi_distributions[arm_loss],
+                {lower_quartile, median, upper_quartile} = get_quartiles(pi_dist),
+                iqr = upper_quartile - lower_quartile,
+                min = Math.max(lower_quartile - (1.5 * iqr), 0),
+                max = Math.min(upper_quartile + (1.5 * iqr), 1),
+                x_coord = x(i);
+              let box = loss_boxplot.append("g");
+              box.append("line")
+                .attr("x1", x_coord)
+                .attr("x2", x_coord)
+                .attr("y1", y(min))
+                .attr("y2", y(max))
+                .attr("stroke", "black");
+              box.append("rect")
+                .attr("x", x_coord - box_half_width)
+                .attr("y", y(upper_quartile))
+                .attr("height", y(lower_quartile) - y(upper_quartile))
+                .attr("width", 2 * box_half_width)
+                .attr("stroke", "black")
+                .attr("fill", "#69b3a2")
+                .attr("opacity", 0.6);
+              box.append("g")
+                .selectAll("line")
+                .data([min, median, max])
+                .join("line")
+                .attr("x1", x_coord - box_half_width)
+                .attr("x2", x_coord + box_half_width)
+                .attr("y1", d => y(d))
+                .attr("y2", d => y(d))
+                .attr("stroke", "black")
+            }
+          }
+        }
+      });
+
+      $("#cnv-pi-boxplot").cnv_boxplot(@@boxplot_options)
+    })
+  </script>
+  <script>
+    $(function() {
+      $.widget("PhylogicTiming.cnv_pi_histograms", {
+
+        options: {
+          pi_distributions: {}
+        },
+
+        _create: function() {
+          let pi_distributions = this.options.pi_distributions,
+            container = d3.select(this.element.context),
+            left_margin = 10,
+            right_margin = 10,
+            top_margin = 20,
+            bottom_margin = 20,
+            width = 300,
+            height = 250;
+          for (let event_name in pi_distributions) {
+            let pi_dist = pi_distributions[event_name],
+              max_bin = Math.max(...pi_dist);
+
+            let x = d3.scaleLinear()
+              .domain([0, 100])
+              .range([left_margin, width - right_margin]);
+            let y = d3.scaleLinear()
+              .domain([0, max_bin]).nice()
+              .range([height - bottom_margin, top_margin]);
+
+            let pi_hist = container.append("div").append("svg")
+              .attr("baseProfile", "full")
+              .attr("viewBox", "0 0 " + width + " " + height)
+              .attr("version", "1.1")
+              .attr("xmlns", "http://www.w3.org/2000/svg")
+              .attr("xmlns:ev", "http://www.w3.org/2001/xml-events")
+              .attr("xmlns:xlink", "http://www.w3.org/1999/xlink")
+              .attr("overflow", "visible")
+              .style("min-width", "300px");
+            pi_hist.append("g")
+              .call(g => g
+                .attr("transform", "translate(0 " + (height - bottom_margin) + ")")
+                .call(d3.axisBottom(x).tickFormat(d => d / 100))
+              );
+            pi_hist.append("text")
+              .attr("x", (width + left_margin - right_margin) / 2)
+              .attr("y", 16)
+              .attr("text-anchor", "middle")
+              .attr("font-size", "16px")
+              .text(event_name.replace("_", " "));
+
+            let zero_str = Array(101).fill(0).reduce((a, c, i) => a + " " + x(100 - i) + "," + y(0), ""),
+              color = event_name.startsWith("loss") ? "blue" : "green";
+
+            pi_hist.append("polygon")
+              .attr("points", pi_dist.reduce((a, c, i) => a + x(i) + "," + y(c) + " ", "") + zero_str)
+              .attr("fill", color)
+              .attr("fill-opacity", .5)
+          }
+        }
+      });
+
+      $("#cnv-pi-histograms-container").cnv_pi_histograms(@@cnv_pi_histograms_options)
+    })
+  </script>
+  <script>
+    $(function() {
+      $.widget("PhylogicTiming.driver_pi_histograms", {
+
+        options: {
+          pi_distributions: {}
+        },
+
+        _create: function() {
+          let pi_distributions = this.options.pi_distributions,
+            container = d3.select(this.element.context),
+            left_margin = 10,
+            right_margin = 10,
+            top_margin = 20,
+            bottom_margin = 20,
+            width = 300,
+            height = 250;
+          for (let event_name in pi_distributions) {
+            let pi_dist = pi_distributions[event_name],
+              max_bin = Math.max(...pi_dist);
+
+            let x = d3.scaleLinear()
+              .domain([0, 100])
+              .range([left_margin, width - right_margin]);
+            let y = d3.scaleLinear()
+              .domain([0, max_bin]).nice()
+              .range([height - bottom_margin, top_margin]);
+
+            let pi_hist = container.append("div").append("svg")
+              .attr("baseProfile", "full")
+              .attr("viewBox", "0 0 " + width + " " + height)
+              .attr("version", "1.1")
+              .attr("xmlns", "http://www.w3.org/2000/svg")
+              .attr("xmlns:ev", "http://www.w3.org/2001/xml-events")
+              .attr("xmlns:xlink", "http://www.w3.org/1999/xlink")
+              .attr("overflow", "visible")
+              .style("min-width", "300px");
+            pi_hist.append("g")
+              .call(g => g
+                .attr("transform", "translate(0 " + (height - bottom_margin) + ")")
+                .call(d3.axisBottom(x).tickFormat(d => d / 100))
+              );
+            pi_hist.append("text")
+              .attr("x", (width + left_margin - right_margin) / 2)
+              .attr("y", 16)
+              .attr("text-anchor", "middle")
+              .attr("font-size", "16px")
+              .text(event_name.replace("_", " "));
+
+            let zero_str = Array(101).fill(0).reduce((a, c, i) => a + " " + x(100 - i) + "," + y(0), "");
+
+            pi_hist.append("polygon")
+              .attr("points", pi_dist.reduce((a, c, i) => a + x(i) + "," + y(c) + " ", "") + zero_str)
+              .attr("fill", "orange")
+              .attr("fill-opacity", .5)
+          }
+        }
+      });
+
+      $("#driver-pi-histograms-container").driver_pi_histograms(@@driver_pi_histograms_options)
+    })
+  </script>
+  <script>
+    $(function() {
+      $.widget("PhylogicTiming.timing_table", {
+        options: {
+          eve_list: []
+        },
+
+        _create: function() {
+          let eve_list = this.options.eve_list,
+            table = d3.select(this.element.context).append("table"),
+            columns = [
+              {"data": "Event name"},
+              {"data": "Chromosome"},
+              {"data": "Position"},
+              {"data": "Pi score"}
+            ];
+          table.append("thead")
+            .selectAll("th")
+            .data(columns)
+            .join("th")
+            .text(d => d.data);
+          let order_by = function(eve) {
+            let score = 0;
+            if (eve["Event name"].startsWith("gain")) {
+              score += 25
+            } else if (eve["Event name"].startsWith("loss")) {
+              score += 50
+            } else if (eve["Event name"] !== "WGD") {
+              score += 75
+            }
+            score += eve["Chromosome"] === "X" ? 23 : parseInt(eve["Chromosome"]) | 24;
+            return score
+          };
+          eve_list.sort(function(a, b) {
+            if (order_by(a) < order_by(b)) {
+              return -1
+            }
+            if (order_by(a) > order_by(b)) {
+              return 1
+            }
+            return 0
+          });
+          table.append("tbody")
+            .selectAll("tr")
+            .data(eve_list)
+            .join("tr")
+            .html(d =>
+              "<td>" + d["Event name"] + "</td>" +
+              "<td>" + d["Chromosome"] + "</td>" +
+              "<td>" + d["Position"] + "</td>" +
+              "<td>" + d["Pi score"] + "</td>");
+          $(table.node()).DataTable({
+            "columns": columns,
+            "order": []
+          })
+        }
+      });
+
+      $("#event-pi-table").timing_table(@@timing_table_options)
+    })
+  </script>
+</body>
+</html>

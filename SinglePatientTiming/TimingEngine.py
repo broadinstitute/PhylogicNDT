@@ -329,9 +329,8 @@ class TimingSample(object):
                 if abs(cn_a2 - round(cn_a2)) <= .2:
                     cn_a2 = round(cn_a2)
                 state_tuple = (cn_a1, cn_a2)
-                if state_tuple != (1., 1.):
-                    state_bps.setdefault(state_tuple, 0)
-                    state_bps[state_tuple] += seg_len
+                state_bps.setdefault(state_tuple, 0)
+                state_bps[state_tuple] += seg_len
             states_over_threshold = [cn for cn, bp in state_bps.items() if bp > arm_bp * size_threshold]
             if arm_bp < true_arm_bp * .5:  # Only call if at least 50% of arm is in segs
                 self.missing_arms.append((chrN, arm))
@@ -372,12 +371,12 @@ class TimingSample(object):
             for cn_state in self.cn_states.values():
                 if cn_state.cn_a2 >= 2:
                     supporting_arm_states.append(cn_state)
-                if cn_state.cn_a1 == 0 or cn_state.cn_a1 >= 2 and cn_state.cn_a2 >= 2:  # region supports WGD if 0/2 or 2/2
+                if (cn_state.cn_a1 == 0 or cn_state.cn_a1 >= 2) and cn_state.cn_a2 >= 2:  # region supports WGD if 0/2 or 2/2
                     regions_supporting_WGD.append(cn_state)
                 if cn_state.cn_a1 >= 2 and cn_state.cn_a2 >= 2:
                     regions_both_arms_gained.append(cn_state)
-            if len(regions_both_arms_gained) >= 5 or len(regions_supporting_WGD) >= (
-                    len(self.arm_regions) - len(self.missing_arms)) * .5:
+            if len(regions_both_arms_gained) >= 5 or len(regions_supporting_WGD) * 2 >= \
+                    len(self.arm_regions) - len(self.missing_arms):
                 supporting_arm_states = [TimingCNState([self], s.chrN, s.arm, (s.cn_a1, s.cn_a2), s.purity, supporting_muts=s.supporting_muts) for
                                          s in supporting_arm_states]
                 self.WGD = TimingWGD(supporting_arm_states=supporting_arm_states)
