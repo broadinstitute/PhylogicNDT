@@ -60,15 +60,16 @@ class CellPopulationEngine:
             log_dist = np.log(dist, dtype=np.float32)
         return np.exp(log_dist - self.logSumExp(log_dist))
 
-    def _compute_cluster_constrained_density(self, node, cluster_density, sample_id, iter_ccf):
+    def _compute_cluster_constrained_density(self, node, cluster_density, sample_id, iter_ccf, conv=1e-40):
         parent = node.parent
         if parent:
             # it is required that parent constrained ccf was already assigned
             if parent.data.identifier in iter_ccf:
                 parent_cluster_ccf = iter_ccf[parent.data.identifier]
                 siblings_total_ccf = sum([iter_ccf[sibling] for sibling in node.siblings if sibling in iter_ccf])
-                leftover_ccf = int(parent_cluster_ccf - siblings_total_ccf)               
-                cluster_constrained_density = list(cluster_density[:leftover_ccf + 1]) + [0.0] * (100 - leftover_ccf)               
+                leftover_ccf = int(parent_cluster_ccf - siblings_total_ccf)                
+                cluster_constrained_density = list(cluster_density[:leftover_ccf + 1]) + [0.0] * (100 - leftover_ccf)
+                cluster_constrained_density[leftover_ccf] += sum(cluster_density[leftover_ccf+1:])
                 if sum(cluster_constrained_density) > 0:
                     return self._normalize_in_logspace(cluster_constrained_density, in_log_space=False)
                 else:
