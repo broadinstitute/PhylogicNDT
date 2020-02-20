@@ -85,7 +85,7 @@ Just BuildTree
 
 GrowthKinetics
 
-	./PhylogicNDT.py GrowthKinetics -i Indiv_ID -sif Patient.sif  -m mutation_ccf_file -c cluster_ccf_file -w 10 10 10 10 10 -t 1 2 3 4 5 
+	./PhylogicNDT.py GrowthKinetics -i Indiv_ID -sif Patient.sif -ab cell_population_abundance_mcmc_trace -w 10 10 10 10 10 -t 1 2 3 4 5 
 
 Run Cluster together with BuildTree
 

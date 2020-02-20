@@ -1,6 +1,7 @@
 from scipy import stats
 import random
 from random import shuffle
+from collections import defaultdict
 import collections
 import numpy as np
 import numba as nb
@@ -16,7 +17,7 @@ class CellPopulationEngine:
             random.seed(seed)
             np.random.seed(seed=seed)
         self._patient = patient
-        self._all_configurations = {}
+        self._all_configurations = {}             
         if patient.ClusteringResults:
             self._clustering_results = patient.ClusteringResults
         else:
@@ -59,25 +60,17 @@ class CellPopulationEngine:
             log_dist = np.log(dist, dtype=np.float32)
         return np.exp(log_dist - self.logSumExp(log_dist))
 
-    def _compute_cluster_constrained_density(self, node, cluster_density, iter_ccf):
+    def _compute_cluster_constrained_density(self, node, cluster_density, sample_id, iter_ccf):
         parent = node.parent
         if parent:
+            # it is required that parent constrained ccf was already assigned
             if parent.data.identifier in iter_ccf:
                 parent_cluster_ccf = iter_ccf[parent.data.identifier]
                 siblings_total_ccf = sum([iter_ccf[sibling] for sibling in node.siblings if sibling in iter_ccf])
-                leftover_ccf = int(parent_cluster_ccf - siblings_total_ccf)
-                logging.debug('Node {} has parent {} with ccf {}'.format(node.identifier,
-                                                                         node.parent.identifier,
-                                                                         parent_cluster_ccf))
-                logging.debug('Node {} has siblings {} with total ccf {}'.format(node.identifier,
-                                                                                 node.siblings,
-                                                                                 siblings_total_ccf))
-                logging.debug('Node {} has leftover ccf {}'.format(node.identifier,
-                                                                   leftover_ccf))
-
-                constrained_cluster_density = list(cluster_density[:leftover_ccf + 1]) + [0.0] * (100 - leftover_ccf)
-                if sum(constrained_cluster_density) > 0:
-                    return self._normalize_in_logspace(constrained_cluster_density, in_log_space=False)
+                leftover_ccf = int(parent_cluster_ccf - siblings_total_ccf)               
+                cluster_constrained_density = list(cluster_density[:leftover_ccf + 1]) + [0.0] * (100 - leftover_ccf)               
+                if sum(cluster_constrained_density) > 0:
+                    return self._normalize_in_logspace(cluster_constrained_density, in_log_space=False)
                 else:
                     return None
             else:
@@ -86,18 +79,17 @@ class CellPopulationEngine:
         else:
             return cluster_density
 
-    def sample_cluster_ccf(self, node, sample_clusters_ccf, iter_ccf, hist):
+    def sample_cluster_ccf(self, node, sample_clusters_ccf, sample_id, iter_ccf, hist):
         cluster_ccf = sample_clusters_ccf[node.data.identifier]
-        cluster_constrained_density = self._compute_cluster_constrained_density(node, cluster_ccf, iter_ccf)
-        logging.debug(
-            'Constrained distribution for node {} is \n{}'.format(node.identifier, cluster_constrained_density))
-        if cluster_constrained_density is not None:
+        cluster_constrained_density = self._compute_cluster_constrained_density(node, cluster_ccf, sample_id, iter_ccf)                      
+        if cluster_constrained_density is not None:            
+            cluster_constrained_density = self._normalize_in_logspace(cluster_constrained_density, in_log_space=False)
             return self.sample_ccf(hist, cluster_constrained_density)
-        else:
+        else:            
             logging.warn('Constrained ccf for node {} is None'.format(node.identifier))
-            return 0.0
+            return 0.0        
 
-    def _compute_sample_constrained_ccf(self, sample_clusters_ccf, tree_levels, n_iter=250, burn_in=100):
+    def _compute_sample_constrained_ccf(self, sample_clusters_ccf, sample_id, tree_levels, n_iter=250, burn_in=100):
         """ For each cluster computes constrained density and samples ccf from that density
             :returns the most frequent ccf guration for the sample across all iterations """
         hist = range(101)
@@ -112,7 +104,7 @@ class CellPopulationEngine:
                 # For each node in the level
                 for node_id in level_nodes:
                     node = self._top_tree.nodes[node_id]
-                    cluster_sampled_ccf = self.sample_cluster_ccf(node, sample_clusters_ccf, iter_ccf, hist)
+                    cluster_sampled_ccf = self.sample_cluster_ccf(node, sample_clusters_ccf, sample_id, iter_ccf, hist)
                     logging.debug('Cluster {} has constrained ccf {}'.format(node_id, cluster_sampled_ccf))
                     iter_ccf[node.data.identifier] = cluster_sampled_ccf
             if i >= burn_in:
@@ -180,7 +172,7 @@ class CellPopulationEngine:
         samples_ccf = {}
         for idx, sample in enumerate(self._patient.sample_list):
             sample_clusters_density = self._get_sample_clusters_densities(idx)
-            sample_mcmc_trace = self._compute_sample_constrained_ccf(sample_clusters_density, tree_levels, n_iter)
+            sample_mcmc_trace = self._compute_sample_constrained_ccf(sample_clusters_density, sample.sample_name, tree_levels, n_iter)
             most_frequent_config, most_frequent_count = self._get_most_frequent_configuration(sample_mcmc_trace)
             samples_ccf[sample.sample_name] = most_frequent_config
             # For each sample record its MCMC trace

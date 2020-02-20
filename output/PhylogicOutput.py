@@ -1024,11 +1024,21 @@ class PhylogicOutput(object):
                         writer.write('\t'.join([indiv_id, sample_id, str(iteration), str(cluster), str(amount)]) + '\n')
 
     @staticmethod
+    def write_mcmc_constrained_densitites(mcmc_trace_constrained_densitites, indiv_id):
+        ccf = [str(x) for x in np.arange(0, 101) * 0.01]
+        header = ['Patient_ID', 'Sample_ID', 'Iteration', 'Cluster_ID'] + ccf
+        with open(indiv_id + '_mcmc_trace_constrained_densities.tsv', 'w') as writer:
+            writer.write('\t'.join(header) + '\n')
+            for sample_id, cluster_densitites in mcmc_trace_constrained_densitites.items():
+                for cluster_id, densities in cluster_densitites.items():
+                    for iteration, constrained_density in enumerate(densities):                        
+                        line = [indiv_id, str(sample_id), str(iteration), str(cluster_id)] + [str(x) for x in constrained_density]
+                        writer.write('\t'.join(line) + '\n')
+
+    @staticmethod
     def write_cell_abundances_tsv(cell_abundances, cells_ancestry, indiv_id):
         """
-
         Returns:
-
         """
         # add header
         header = ['Patient_ID', 'Sample_ID', 'Cell_population', 'Cell_abundance']
@@ -1056,6 +1066,31 @@ class PhylogicOutput(object):
                     population = '_'.join(['CL{}'.format(cl) for cl in cells_ancestry[cluster_id]])
                     line = [indiv_id, sample_id, population, str(abundance)]
                     writer.write('\t'.join(line) + '\n')
+
+    @staticmethod
+    def write_growth_rate_tsv(growth_rates, indiv_id):
+        header = ['Patient_ID', 'Cluster_ID', 'Iteration', 'Growth_Rate']
+        with open(indiv_id + '_growth_rate.tsv', 'w') as writer:
+            writer.write('\t'.join(header) + '\n')
+            for cluster_id, cluster_growth_rates in growth_rates.items():
+                for iteration, rate in enumerate(cluster_growth_rates):                    
+                    line = [indiv_id, str(cluster_id), str(iteration), str(rate)]
+                    writer.write('\t'.join(line) + '\n')
+
+    
+    def plot_growth_rates(self, growth_rates, indiv):    
+        import seaborn as sns
+        for clust, rate in growth_rates.items():
+            if sum(rate) == 0: 
+                continue
+            sns.distplot(np.array(rate), bins=35,
+                            label=str(clust) + " - %1.2f" % (sum(np.array(rate) < 0) / float(len(rate))),
+                            color=ClusterColors.get_hex_string(clust))            
+        plt.title("Clusters growth rate")
+        plt.xlabel("growth rate")
+        plt.ylabel("Probability Density")
+        plt.legend()
+        plt.savefig(indiv + ".growth_rate.pdf")
 
     def write_timing_tsv(self, timing_engine):
         """
