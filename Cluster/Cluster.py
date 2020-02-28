@@ -96,6 +96,7 @@ def run_tool(args):
     phylogicoutput.write_patient_cluster_ccfs(patient_data, cluster_ccfs)
     phylogicoutput.write_patient_mut_ccfs(patient_data, cluster_ccfs)
     phylogicoutput.write_patient_cnvs(patient_data, cluster_ccfs)
+    phylogicoutput.write_patient_unclustered_events(patient_data)
     phylogicoutput.plot_1d_clusters('{}.cluster_ccfs.txt'.format(patient_data.indiv_name))
     phylogicoutput.plot_1d_mutations('{}.mut_ccfs.txt'.format(patient_data.indiv_name))
 

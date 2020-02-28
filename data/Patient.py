@@ -354,7 +354,10 @@ class Patient:
                     mut.clust_ccf = clust_CCF_results[cluster_assignment - 1][i]
             else:
                 print('Did not cluster ' + str(mut))
-                self.unclustered_muts.append(mut)
+                self.unclustered_muts.append(mut.var_str)
+                for sample in self.sample_list:
+                    mut = sample.get_mut_by_varstr(mut.var_str)
+                    sample.unclustered_muts.append(mut)
                 # for sample in self.sample_list:
                 #     mut = sample.get_mut_by_varstr(mut.var_str)
                 #     mut.cluster_assignment = None

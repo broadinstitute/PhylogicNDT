@@ -93,6 +93,7 @@ class TumorSample:
         self.ClustersPostMarginal = None  # format F[Cluster] = CCF post hist
 
         self.concordant_variants = []  # store variants concordant with other tumor samples
+        self.unclustered_muts = []
         # self.concordant_with_samples = []  # store  with other tumor samples were used for variants concordance
         self.purity = purity
 
