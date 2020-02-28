@@ -908,9 +908,9 @@ class PhylogicOutput(object):
             f.write('\t'.join(header))
             for i, sample in enumerate(patient.sample_list):
                 for mut in sample.low_coverage_mutations.values():
-                    if mut.type == 'CNV':
+                    if mut.type == 'CNV' and hasattr(mut, 'cluster_assignment') and mut.cluster_assignment is not None:
                         mut_mean, mut_high, mut_low = self._get_mean_high_low(np.array(mut.ccf_1d))
-                        c = mut.cluster_assignment if hasattr(mut, 'cluster_assignment') else None
+                        c = mut.cluster_assignment
                         if c:
                             clust_mean, clust_high, clust_low = self._get_mean_high_low((np.array(cluster_ccfs[c][i])))
                         else:
@@ -920,6 +920,35 @@ class PhylogicOutput(object):
                                 mut.cluster_assignment, mut_mean, mut_low, mut_high, clust_mean, clust_low, clust_high]
                         line.extend(mut.ccf_1d)
                         f.write('\n' + '\t'.join(map(str, line)))
+
+    def write_patient_unclustered_events(self, patient):
+        header = ['Patient_ID', 'Sample_ID', 'Sample_Alias', 'Event_Name', 'Chromosome', 'Start_position',
+                  'End_position', 'Reference_Allele', 'Tumor_Seq_Allele', 't_ref_count', 't_alt_count',
+                  'Protein_change', 'Variant_Classification', 'Variant_Type', 'preDP_ccf_mean', 'preDP_ccf_CI_low',
+                  'preDP_ccf_CI_high']
+        header.extend('preDP_ccf_{}'.format(float(x) / 100) for x in range(101))
+        with open('{}.unclustered.txt'.format(patient.indiv_name), 'w') as f:
+            f.write('\t'.join(header))
+            for i, sample in enumerate(patient.sample_list):
+                for mut in sample.unclustered_muts:
+                    mut_mean, mut_high, mut_low = self._get_mean_high_low(np.array(mut.ccf_1d))
+                    if mut.type == 'CNV':
+                        start = mut.start
+                        end = mut.end
+                        ref = alt = ref_cnt = alt_cnt = prot_change = mut_category = ''
+                    else:
+                        start = end = mut.pos
+                        ref = mut.ref
+                        alt = mut.alt
+                        ref_cnt = mut.ref_cnt
+                        alt_cnt = mut.alt_cnt
+                        prot_change = mut.prot_change
+                        mut_category = mut.mut_category
+                    line = [patient.indiv_name, sample.sample_name, '', mut.event_name, mut.chrN, start,
+                            end, ref, alt, ref_cnt, alt_cnt, prot_change, mut_category, mut.type,
+                            mut_mean, mut_low, mut_high]
+                    line.extend(mut.ccf_1d)
+                    f.write('\n' + '\t'.join(map(str, line)))
 
     @staticmethod
     def _get_mean_high_low(ccf, confidence=.90):
