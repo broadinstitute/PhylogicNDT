@@ -356,8 +356,11 @@ class Patient:
                 print('Did not cluster ' + str(mut))
                 self.unclustered_muts.append(mut.var_str)
                 for sample in self.sample_list:
-                    mut = sample.get_mut_by_varstr(mut.var_str)
-                    sample.unclustered_muts.append(mut)
+                    try:
+                        mut = sample.low_coverage_mutations[mut.var_str]
+                        sample.unclustered_muts.append(mut)
+                    except KeyError:
+                        print(mut.var_str + ' not found in ' + sample.sample_name)
                 # for sample in self.sample_list:
                 #     mut = sample.get_mut_by_varstr(mut.var_str)
                 #     mut.cluster_assignment = None
