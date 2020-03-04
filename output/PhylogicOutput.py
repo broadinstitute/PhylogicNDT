@@ -945,7 +945,7 @@ class PhylogicOutput(object):
                         alt_cnt = mut.alt_cnt
                         prot_change = mut.prot_change
                         mut_category = mut.mut_category
-                        event_name = mut.gene + '_' + mut.prot_change
+                        event_name = mut.gene + ('_' + mut.prot_change if mut.prot_change else '')
                     line = [patient.indiv_name, sample.sample_name, '', event_name, mut.chrN, start,
                             end, ref, alt, ref_cnt, alt_cnt, prot_change, mut_category, mut.type,
                             mut_mean, mut_low, mut_high]
