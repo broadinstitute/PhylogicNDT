@@ -936,6 +936,7 @@ class PhylogicOutput(object):
                         start = mut.start
                         end = mut.end
                         ref = alt = ref_cnt = alt_cnt = prot_change = mut_category = ''
+                        event_name = mut.event_name
                     else:
                         start = end = mut.pos
                         ref = mut.ref
@@ -944,7 +945,11 @@ class PhylogicOutput(object):
                         alt_cnt = mut.alt_cnt
                         prot_change = mut.prot_change
                         mut_category = mut.mut_category
-                    line = [patient.indiv_name, sample.sample_name, '', mut.event_name, mut.chrN, start,
+                        if mut.gene:
+                            event_name = mut.gene + ('_' + mut.prot_change if mut.prot_change else '')
+                        else:
+                            event_name = mut.var_str
+                    line = [patient.indiv_name, sample.sample_name, '', event_name, mut.chrN, start,
                             end, ref, alt, ref_cnt, alt_cnt, prot_change, mut_category, mut.type,
                             mut_mean, mut_low, mut_high]
                     line.extend(mut.ccf_1d)
