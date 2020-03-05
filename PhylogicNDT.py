@@ -232,6 +232,11 @@ def build_parser():
                             default=0,
                             help='num samples to match, 0 for all samples')
 
+    clustering.add_argument('--maf_input_type', '-mt',
+                            action='store',
+                            dest='maf_input_type',
+                            default='auto')
+
     # BuildTree  Tool
 
     buildtree = subparsers.add_parser("BuildTree", help="BuildTree module for constructing of phylogenetic trees.",

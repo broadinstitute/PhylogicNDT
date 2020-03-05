@@ -13,6 +13,8 @@ from scipy.interpolate import interp1d
 
 from SomaticEvents import SomMutation, CopyNumberEvent
 
+from utils.calc_ccf import calc_ccf as calc_ccf_
+
 na_values = {'-1.#IND', '1.#QNAN', '1.#IND', '-1.#QNAN', '#N/A', 'N/A', 'NA', '#NA', 'NULL', 'NaN', '-NaN', 'nan',
              '-nan', ''}  # http://pandas.pydata.org/pandas-docs/stable/io.html#na-values
 
@@ -81,6 +83,7 @@ class TumorSample:
 
         # Dictionary for easy lookup later.
         self.low_coverage_mutations = {}
+        self.purity = purity
 
         # load and filter mutations
         self.mutations = self._load_sample_ccf(file_name, input_type,
@@ -95,7 +98,6 @@ class TumorSample:
         self.concordant_variants = []  # store variants concordant with other tumor samples
         self.unclustered_muts = []
         # self.concordant_with_samples = []  # store  with other tumor samples were used for variants concordance
-        self.purity = purity
 
     @staticmethod
     def _rebin_to_n(y, n):
@@ -127,7 +129,10 @@ class TumorSample:
             mut_with_ccf_dat = self._read_ccf_from_txt(filen)
         elif input_type == 'calc_ccf': # TODO: implement this
             # when only abs CN and ref/alt counts present
-            raise NotImplementedError("Please provide precomputed raw ccf values!")
+            if self._auto_file_type(filen) != 'tab':
+                raise NotImplementedError('CCF calculation only implemented for plain text files')
+            assert self.purity, 'Purity is required to calculate CCF'
+            mut_with_ccf_dat = self._read_ccf_from_txt(filen, calc_ccf=True)
         elif input_type == 'sqlite':
             mut_with_ccf_dat = self._read_ccf_from_sqlite(filen)
         elif input_type == 'post-clustering':
@@ -275,7 +280,9 @@ class TumorSample:
                                  "ccf_0." in column_loc[0] or "ccf_1." in column_loc[0]]
 
         for line in file_in:
-            spl = line.strip().split('\t')
+            spl = line.strip('\n\r').split('\t')
+            if not spl:
+                continue
             if "Chromosome" in h:
                 std_param = [spl[h["Chromosome"]], spl[h["Start_position"]], spl[h["Reference_Allele"]],
                              spl[h["Tumor_Seq_Allele2"]]]
@@ -284,7 +291,27 @@ class TumorSample:
                 std_param = spl[:4]
 
             if calc_ccf:
-                ccf = [float("NaN")] * self.ccf_grid_size  # calculate after creation.
+                try:
+                    local_cn_a1 = float(spl[h['local_cn_a1']])
+                    local_cn_a2 = float(spl[h['local_cn_a2']])
+                    if 't_alt_count' in h:
+                        alt_cnt = int(float(spl[h['t_alt_count']]))
+                    elif 'observed_alt' in h:
+                        alt_cnt = int(float(spl[h['observed_alt']]))
+                    else:
+                        raise KeyError('No recognized fields for alt allele count')
+                    if 't_ref_count' in h:
+                        ref_cnt = int(float(spl[h['t_ref_count']]))
+                    elif 'ref' in h:
+                        ref_cnt = int(float(spl[h['ref']]))
+                    else:
+                        raise KeyError('No recognized fields for ref allele count')
+                    ccf = list(calc_ccf_(local_cn_a1, local_cn_a2, alt_cnt, ref_cnt, self.purity,
+                                         grid_size=self.ccf_grid_size))
+                except ValueError:
+                    logging.warning('Cannot calculate CCF for mutation because of missing allele counts or copy number')
+                    continue
+
             else:
                 try:
                     # assume ccf at the end of the split since headers vary for this one.
@@ -307,19 +334,18 @@ class TumorSample:
                 continue
             mut = SomMutation.from_dict(std_param, opt_dict, from_sample=self)
 
-            if calc_ccf:
-                try:
-                    maj_a, min_a, frac_s_maj, frac_s_min, nMaj2_A, nMin2_A = \
-                        list(cn_tree[str(mut.chrN)][mut.pos:mut.pos + 1])[0].data
-                    # TODO: error here: unresolved reference ccf_hist
-                    mut.ccf_1d = ccf_hist.get_ccf(maj_a, min_a, frac_s_maj, frac_s_min, nMaj2_A, nMin2_A, mut.alt_cnt,
-                                                  mut.ref_cnt, cn_tree["purity"])
-
-                except IndexError:
-                    logging.warning("Mutation doesn't overlap CN! " + str(mut))
-                except ValueError:
-                    logging.error(
-                        map(str, [maj_a, min_a, frac_s_maj, frac_s_min, nMaj2_A, nMin2_A, mut.alt_cnt, mut.ref_cnt]))
+            # if calc_ccf:
+            #     try:
+            #         maj_a, min_a, frac_s_maj, frac_s_min, nMaj2_A, nMin2_A = \
+            #             list(cn_tree[str(mut.chrN)][mut.pos:mut.pos + 1])[0].data
+            #         mut.ccf_1d = ccf_hist.get_ccf(maj_a, min_a, frac_s_maj, frac_s_min, nMaj2_A, nMin2_A, mut.alt_cnt,
+            #                                       mut.ref_cnt, cn_tree["purity"])
+            #
+            #     except IndexError:
+            #         logging.warning("Mutation doesn't overlap CN! " + str(mut))
+            #     except ValueError:
+            #         logging.error(
+            #             map(str, [maj_a, min_a, frac_s_maj, frac_s_min, nMaj2_A, nMin2_A, mut.alt_cnt, mut.ref_cnt]))
 
             mutation_list.append(mut)
 
@@ -366,14 +392,14 @@ class TumorSample:
     @staticmethod
     def _auto_file_type(filen):
         file_extension = os.path.splitext(filen)[1]
-        if file_extension in ['.txt', '.tab', '.tsv']:
+        if file_extension in ['.txt', '.tab', '.tsv', '.maf']:
             return 'tab'
         elif file_extension == '.RData':
             return 'absolute'
         elif file_extension == '.db':
             return 'sqlite'
         else:
-            raise IOError("ERROR: Cannot guess file type please use .RData, .txt, .tsv, .tab or .db")
+            raise IOError("ERROR: Cannot guess file type please use .RData, .txt, .tsv, .tab, .maf or .db")
 
     def add_muts_to_hashtable(self, muts):
         if hasattr(muts, '__iter__'):
