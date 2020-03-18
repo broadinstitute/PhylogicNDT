@@ -59,9 +59,11 @@ with headers: sample_id maf_fn seg_fn purity timepoint
 
     ./PhylogicNDT.py Cluster -i Patient_ID  -sif Patient.sif
 
-the .maf should contain pre-computed raw ccf histograms based on mutations alt/ref count, local copy-number and sample purity 
+the .maf should contain pre-computed raw ccf histograms based on mutations alt/ref count 
 (Absolute annotated mafs or .Rdata files are also supported)
-if the ccf histograms are absent - PhylogicNDT will attempt to compute them from available mutation info as above 
+if the ccf histograms are absent - the `--maf_input_type` flag must be set to
+`calc_ccf` and sample purity must be provided. Also local copy number must
+be attached to each mutation in the maf with columns named `local_cn_a1` and `local_cn_a2`
 
 CN_seg is optional to annotate copy-number information on the trees
 
