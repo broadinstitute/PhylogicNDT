@@ -72,7 +72,7 @@ def run_tool(args):
             patient_data.addSample(maf_fn, sample_id, timepoint_value=timepoint, grid_size=args.grid_size,
                                    _additional_muts=None,
                                    seg_file=seg_fn,
-                                   purity=purity)
+                                   purity=purity, input_type=args.maf_input_type)
             if len(patient_data.sample_list) == args.n_samples:  # use only first N samples
                 break
 
