@@ -1,10 +1,8 @@
 import numpy as np
-import numba as nb
 import random
 import logging
 
 
-@nb.njit()
 def logSumExp(ns):
     max_ = np.max(ns)
     ds = ns - max_
