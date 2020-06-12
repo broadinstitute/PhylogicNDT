@@ -53,6 +53,7 @@ class TimingEngine(object):
             states_across_samples = {}  # hold union of all copy number states in all samples
             for sample in self.sample_list:
                 if region in sample.cn_states:
+                    # Coerce copy number states to integer states
                     if 0. <= sample.cn_states[region].cn_a1 < 1.:
                         cn_a1 = 0.
                     elif 1. < sample.cn_states[region].cn_a1 <= 2.:
@@ -182,7 +183,7 @@ class TimingEngine(object):
                 cluster_ccfs.setdefault(c, np.zeros((n_samples, 101)))
                 cluster_ccfs[c] += np.log(mut.ccf_dist + 1e-10)
         for c in cluster_ccfs:
-            cluster_ccfs[c] = np.exp(cluster_ccfs[c] - logsumexp(cluster_ccfs[c]))
+            cluster_ccfs[c] = np.exp(cluster_ccfs[c] - logsumexp(cluster_ccfs[c], axis=1, keepdims=True))
         return cluster_ccfs
 
     def time_events(self):
@@ -375,7 +376,7 @@ class TimingSample(object):
                     regions_supporting_WGD.append(cn_state)
                 if cn_state.cn_a1 >= 2 and cn_state.cn_a2 >= 2:
                     regions_both_arms_gained.append(cn_state)
-            if len(regions_both_arms_gained) >= 5 or len(regions_supporting_WGD) * 2 >= \
+            if len(regions_both_arms_gained) >= 5 and len(regions_supporting_WGD) * 2 >= \
                     len(self.arm_regions) - len(self.missing_arms):
                 supporting_arm_states = [TimingCNState([self], s.chrN, s.arm, (s.cn_a1, s.cn_a2), s.purity, supporting_muts=s.supporting_muts) for
                                          s in supporting_arm_states]

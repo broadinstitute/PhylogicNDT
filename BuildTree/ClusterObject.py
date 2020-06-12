@@ -1,6 +1,5 @@
 import logging
 import numpy as np
-import numba as nb
 
 
 class Cluster:
@@ -112,7 +111,6 @@ class Cluster:
                                                                                                self._identifier))
 
     @staticmethod
-    @nb.njit()
     def logSumExp(ns):
         max_ = np.max(ns)
         ds = ns - max_

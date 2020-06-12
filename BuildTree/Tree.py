@@ -1,6 +1,5 @@
 import logging
 import numpy as np
-import numba as nb
 import itertools
 import functools
 
@@ -265,7 +264,6 @@ class Tree:
         return new_children
 
     @staticmethod
-    @nb.njit()
     def logSumExp(ns):
         max_ = np.max(ns)
         ds = ns - max_
