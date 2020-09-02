@@ -18,8 +18,7 @@ def run_tool(args):
             try:
                 sample_time_points[fields['sample_id']] = float(fields['timepoint'])
             except ValueError:
-                sample_time_points = None
-                break
+                raise ValueError('Sample time points in sif file are required')
     wbc_time_points = np.array(args.time) if args.time is not None else None
     gk_engine = GrowthKineticsEngine(patient_data, args.wbc)
     gk_engine.estimate_growth_rate(mcmc_trace_cell_abundance, wbc_time_points=wbc_time_points,
