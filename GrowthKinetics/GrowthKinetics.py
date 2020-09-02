@@ -1,5 +1,6 @@
 import logging
 from collections import defaultdict
+import numpy as np
 
 
 def run_tool(args):
@@ -9,8 +10,19 @@ def run_tool(args):
 
     patient_data = Patient.Patient(indiv_name=args.indiv_id)
     mcmc_trace_cell_abundance, num_itertaions = load_mcmc_trace_abundances(args.abundance_mcmc_trace)
+    with open(args.sif, 'r') as f:
+        header = f.readline().strip('\n').split('\t')
+        sample_time_points = {}
+        for line in f:
+            fields = dict(zip(header, line.strip('\n').split('\t')))
+            try:
+                sample_time_points[fields['sample_id']] = float(fields['timepoint'])
+            except ValueError:
+                raise ValueError('Sample time points in sif file are required')
+    wbc_time_points = np.array(args.time) if args.time is not None else None
     gk_engine = GrowthKineticsEngine(patient_data, args.wbc)
-    gk_engine.estimate_growth_rate(mcmc_trace_cell_abundance, n_iter=min(num_itertaions, args.n_iter))
+    gk_engine.estimate_growth_rate(mcmc_trace_cell_abundance, wbc_time_points=wbc_time_points,
+                                   sample_time_points=sample_time_points, n_iter=min(num_itertaions, args.n_iter))
 
     # Output and visualization
     import output.PhylogicOutput

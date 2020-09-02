@@ -33,48 +33,29 @@ def run_tool(args):
     # Load sample data
 
     if args.sif:  # if sif file is specified
-        sif_file = open(args.sif)
-
-        for file_idx, file_line in enumerate(sif_file):
-
-            ##for now, assume input file order is of the type sample_id\tmaf_fn\tseg_fn\tpurity\ttimepoint
-            if not file_idx:
-                continue
-            if file_line.strip('\n').strip == "":
-                continue  # empty rows
-            smpl_spec = file_line.strip('\n').split('\t')
-            sample_id = smpl_spec[0]
-            maf_fn = smpl_spec[1]
-            seg_fn = smpl_spec[2]
-            purity = float(smpl_spec[3])
-            timepoint = float(smpl_spec[4])
-            print(timepoint)
-            patient_data.addSample(maf_fn, sample_id, timepoint_value=timepoint, grid_size=args.grid_size,
-                                   _additional_muts=None, seg_file=seg_fn,
-                                   purity=purity, input_type=args.maf_input_type)
-
-            if len(patient_data.sample_list) == args.n_samples:  # use only first N samples
-                break
-
-    else:  # if sample names/files are specified directly on cmdline
-
-        # sort order on timepoint or order of entry on cmdline if not present
-        print(args.sample_data)
-        for idx, sample_entry in enumerate(args.sample_data):
-            ##for now, assume input order is of the type sample_id\tmaf_fn\tseg_fn\tpurity\ttimepoint
-            smpl_spec = sample_entry.strip('\n').split(':')
-            sample_id = smpl_spec[0]
-            maf_fn = smpl_spec[1]
-            seg_fn = smpl_spec[2]
-            purity = float(smpl_spec[3])
-            timepoint = float(smpl_spec[4])
-
-            patient_data.addSample(maf_fn, sample_id, timepoint_value=timepoint, grid_size=args.grid_size,
-                                   _additional_muts=None,
-                                   seg_file=seg_fn,
-                                   purity=purity)
-            if len(patient_data.sample_list) == args.n_samples:  # use only first N samples
-                break
+        with open(args.sif) as sif_file:
+            header = sif_file.readline().strip('\n').split('\t')
+            sample_data = sif_file.read().replace('\t', ':').split('\n')
+    else:
+        sample_data = args.sample_data
+        header = ['sample_id', 'maf_fn', 'seg_fn', 'purity', 'timepoint']
+    print(sample_data)
+    for sample_entry in sample_data:
+        ##for now, assume input order is of the type sample_id\tmaf_fn\tseg_fn\tpurity\ttimepoint
+        if not sample_entry.strip():
+            continue
+        smpl_spec = dict(zip(header, sample_entry.split(':')))
+        sample_id = smpl_spec['sample_id']
+        maf_fn = smpl_spec['maf_fn']
+        seg_fn = smpl_spec['seg_fn']
+        purity = float(smpl_spec['purity']) if smpl_spec['purity'] else 1.
+        timepoint = float(smpl_spec['timepoint']) if smpl_spec['timepoint'] else 0.
+        print(timepoint)
+        patient_data.addSample(maf_fn, sample_id, timepoint_value=timepoint, grid_size=args.grid_size,
+                               _additional_muts=None, seg_file=seg_fn, purity=purity, input_type=args.maf_input_type,
+                               seg_input_type=args.seg_input_type)
+        if len(patient_data.sample_list) == args.n_samples:  # use only first N samples
+            break
 
     patient_data.get_arm_level_cn_events()
     patient_data.preprocess_samples()
