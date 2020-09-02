@@ -2,13 +2,14 @@ import numpy as np
 import bisect
 from collections import defaultdict
 from scipy.stats import linregress
+from scipy.interpolate import interp1d
 
 
 class GrowthKineticsEngine:
 
     def __init__(self, patient, wbc):
         self._patient = patient
-        self._wbc = wbc
+        self._wbc = np.array(wbc)
         self._growth_rates = defaultdict(list)
 
     @property
@@ -19,25 +20,30 @@ class GrowthKineticsEngine:
     def wbc(self):
         return self._wbc
 
-    def estimate_growth_rate(self, mcmc_trace_cell_abundance, times=None, n_iter=100, conv=1e-40):
+    def estimate_growth_rate(self, mcmc_trace_cell_abundance, sample_time_points, wbc_time_points=None, n_iter=100,
+                             conv=1e-40):
         '''
-        
+
         '''
         # Number of samples for this Patient
-        sample_list = list(mcmc_trace_cell_abundance.keys())
-        time_points = len(sample_list)
+        sample_list = sorted(sample_time_points, key=sample_time_points.__getitem__)
+        sample_time_points_arr = np.array([sample_time_points[s] for s in sample_list])
         n_clusters = len(list(mcmc_trace_cell_abundance[sample_list[0]]))
-        #cluster_rates = defaultdict(list)
+        # cluster_rates = defaultdict(list)
         # If times of samples are not provided, treat as an integers
-        if not times:
-            times = np.array(range(time_points)) + 1
+        if wbc_time_points is None:
+            assert len(self.wbc) == len(sample_list), 'WBCs not corresponding to samples need time points'
+            wbc_time_points = sample_time_points_arr
+        cond = (wbc_time_points >= min(sample_time_points_arr)) & (wbc_time_points <= max(sample_time_points_arr))
+        inner_wbc = self.wbc[cond]
+        inner_wbc_time_points = wbc_time_points[cond]
         for n in range(n_iter):
-            adj_wbc = self._wbc * (1 + np.array([(np.random.random() - 0.5) / 100. for x in range(len(self._wbc))]))
+            adj_wbc = inner_wbc * (1 + (np.random.random(len(inner_wbc)) - .5) / 100.)
             for cluster_id in range(1, n_clusters + 1):
-                cluster_abundances = []
-                for sample_name, sample_abundances in mcmc_trace_cell_abundance.items():
-                    cluster_abundances.append(sample_abundances[cluster_id][n] + conv)
-                cluster_slope = linregress(times, cluster_abundances * adj_wbc).slope
+                cluster_abundances = [mcmc_trace_cell_abundance[sample_id][cluster_id][n] + conv for sample_id in
+                                      sample_list]
+                inner_cluster_abundances = interp1d(sample_time_points_arr, cluster_abundances)(inner_wbc_time_points)
+                cluster_slope = linregress(inner_wbc_time_points, inner_cluster_abundances * adj_wbc).slope
                 self._growth_rates[cluster_id].append(cluster_slope)
 
     def line_fit(self, x, c_idx, fb_x_vals, len_pre_tp, adj_dens):
