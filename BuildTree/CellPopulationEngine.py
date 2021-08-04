@@ -117,6 +117,16 @@ class CellPopulationEngine:
             sample_clusters_densities[cluster_id] = cluster.hist[sample_id]
         return sample_clusters_densities
 
+    def get_all_constrained_ccfs(self):
+        """ For each MCMC iteration returns constrained ccfs """
+        return self._all_configurations
+        # all_cell_ccfs = {}
+        # for sample_id, sample_constrained_ccf in self._all_configurations.items():
+        #     all_cell_ccfs[sample_id] = []
+        #     for iteration, constrained_ccf in enumerate(sample_constrained_ccf):
+        #         all_cell_ccfs[sample_id].append(constrained_ccf)
+        # return all_cell_ccfs
+
     def get_all_cell_abundances(self):
         """ For each MCMC iteration computes cell abundances """
         all_cell_abundances = {}

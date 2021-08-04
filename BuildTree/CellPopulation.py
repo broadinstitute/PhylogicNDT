@@ -36,6 +36,8 @@ def run_tool(args):
     phylogicoutput.write_all_cell_abundances(cp_engine.get_all_cell_abundances(), args.indiv_id)
     phylogicoutput.write_constrained_ccf_tsv(constrained_ccf, cell_ancestry, args.indiv_id)
     phylogicoutput.write_cell_abundances_tsv(cell_abundance, cell_ancestry, args.indiv_id)
+    if args.cluster_ccf_trace:
+        phylogicoutput.write_cluster_ccf_trace_tsv(cp_engine.get_all_constrained_ccfs(), args.indiv_id)
     phylogicoutput.generate_html_from_tree(args.mutation_ccf_file, args.cluster_ccf_file,
                                            args.indiv_id + '_build_tree_posteriors.tsv',
                                            args.indiv_id + '_constrained_ccf.tsv',

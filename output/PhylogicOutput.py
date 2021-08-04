@@ -1048,14 +1048,18 @@ class PhylogicOutput(object):
         df.to_csv(output_file, sep='\t', index=False)
 
     @staticmethod
-    def write_all_cell_abundances(all_cell_abundances, indiv_id):
-        header = ['Patient_ID', 'Sample_ID', 'Iteration', 'Cluster_ID', 'Abundance']
-        with open(indiv_id + '_cell_population_mcmc_trace.tsv', 'w') as writer:
+    def write_all_cell_abundances(all_cell_abundances, indiv_id, fn='_cell_population_mcmc_trace.tsv', head='Abundance'):
+        header = ['Patient_ID', 'Sample_ID', 'Iteration', 'Cluster_ID', head]
+        with open(indiv_id + fn, 'w') as writer:
             writer.write('\t'.join(header) + '\n')
             for sample_id, sample_mcmc_trace in all_cell_abundances.items():
                 for iteration, abundances in enumerate(sample_mcmc_trace):
                     for cluster, amount in abundances.items():
                         writer.write('\t'.join([indiv_id, sample_id, str(iteration), str(cluster), str(amount)]) + '\n')
+
+    @staticmethod
+    def write_cluster_ccf_trace_tsv(all_cell_ccfs, indiv_id):
+        PhylogicOutput.write_all_cell_abundances(all_cell_ccfs, indiv_id, fn='_cluster_ccf_mcmc_trace.tsv', head='CCF')
 
     @staticmethod
     def write_mcmc_constrained_densitites(mcmc_trace_constrained_densitites, indiv_id):

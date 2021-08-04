@@ -263,6 +263,10 @@ def build_parser():
                             action='append',
                             type=str,
                             help="List cluster ids to blacklist from BuildTree and CellPopulation")
+    buildtree.add_argument('--cluster_ccf_trace',
+                           dest='cluster_ccf_trace',
+                           action='store_true',
+                           help='Save MCMC trace for constrained CCF values (in addition to cell abundance trace)')
 
     buildtree.set_defaults(func=BuildTree.BuildTree.run_tool)
 
@@ -291,6 +295,10 @@ def build_parser():
                                 dest='n_iter',
                                 default=250,
                                 help='number iterations')
+    cellpopulation.add_argument('--cluster_ccf_trace',
+                           dest='cluster_ccf_trace',
+                           action='store_true',
+                           help='Save MCMC trace for constrained CCF values (in addition to cell abundance trace)')
     cellpopulation.set_defaults(func=BuildTree.CellPopulation.run_tool)
 
     # GrowthKinetics  Tool
