@@ -272,6 +272,10 @@ def build_parser():
                            action='store',
                            type=str,
                            help='Specify order of clusters to change cluster colors (i.e. to match other tree). Give as comma-separated string.')
+    buildtree.add_argument('--select_tree',
+                           dest='select_tree',
+                           action='store_true',
+                           help='Specify if you desire to manually select the tree used for the CellPopulation module.')
 
     buildtree.set_defaults(func=BuildTree.BuildTree.run_tool)
 

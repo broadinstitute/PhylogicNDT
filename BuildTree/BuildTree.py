@@ -19,7 +19,7 @@ def run_tool(args):
     patient_data.preprocess_samples()
     # Building Phylogenetic Tree
     bt_engine = BuildTreeEngine(patient_data, seed=args.seed)
-    bt_engine.build_tree(n_iter=args.n_iter)
+    bt_engine.build_tree(n_iter=args.n_iter, select=args.select_tree)
     # Output and visualization
     phylogicoutput = output.PhylogicOutput.PhylogicOutput()
     # Assign Top tree to Patient
