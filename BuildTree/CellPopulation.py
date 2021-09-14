@@ -52,8 +52,8 @@ def run_tool(args):
 def load_tree_edges_file(tree_tsv):
     reader = open(tree_tsv, 'r')
     header = reader.readline()
-    top_tree = reader.readline()
-    return eval(top_tree.split('\t')[-1].strip())
+    top_tree = reader.readline().split('\t')[-1].strip()
+    return top_tree  # todo [(item.split('-')) for item in top_tree.split(',')]
 
 
 def parse_sif_file(sif_file, mutation_ccf_file, patient_data):
@@ -103,10 +103,12 @@ def load_clustering_results(cluster_info_file, patient_data):
         cluster.set_blacklist_status()
         clustering_results[cluster_id] = cluster
 
-    # Add mutations to the cluster
-    mutations = patient_data.sample_list[0].mutations
-    for mutation in mutations:
-        cluster_id = mutation.cluster_assignment
-        clustering_results[cluster_id].add_mutation(mutation)
-
+    # Create for each cluster dictionary of mutations (key - mut_var_str and value- nd_histogram in log space)
+    mutations_nd_hist = {}
+    for mutation in patient_data.sample_list[0].mutations:
+        if mutation not in mutations_nd_hist:
+            mutations_nd_hist[mutation] = []
+        mutations_nd_hist[mutation].append(mutation.ccf_1d)
+    for mutation, mutation_nd_hist in mutations_nd_hist.items():
+        clustering_results[mutation.cluster_assignment].add_mutation(mutation, mutation_nd_hist)
     patient_data.ClusteringResults = clustering_results
