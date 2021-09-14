@@ -267,6 +267,11 @@ def build_parser():
                            dest='cluster_ccf_trace',
                            action='store_true',
                            help='Save MCMC trace for constrained CCF values (in addition to cell abundance trace)')
+    buildtree.add_argument('--cluster_order',
+                           dest='cluster_order',
+                           action='store',
+                           type=str,
+                           help='Specify order of clusters to change cluster colors (i.e. to match other tree). Give as comma-separated string.')
 
     buildtree.set_defaults(func=BuildTree.BuildTree.run_tool)
 
@@ -296,9 +301,14 @@ def build_parser():
                                 default=250,
                                 help='number iterations')
     cellpopulation.add_argument('--cluster_ccf_trace',
-                           dest='cluster_ccf_trace',
-                           action='store_true',
-                           help='Save MCMC trace for constrained CCF values (in addition to cell abundance trace)')
+                                dest='cluster_ccf_trace',
+                                action='store_true',
+                                help='Save MCMC trace for constrained CCF values (in addition to cell abundance trace)')
+    cellpopulation.add_argument('--cluster_order',
+                                dest='cluster_order',
+                                action='store',
+                                type=str,
+                                help='Specify order of clusters to change cluster colors (i.e. to match other tree). Give as comma-separated string.')
     cellpopulation.set_defaults(func=BuildTree.CellPopulation.run_tool)
 
     # GrowthKinetics  Tool

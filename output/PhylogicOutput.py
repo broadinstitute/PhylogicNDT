@@ -113,7 +113,7 @@ class PhylogicOutput(object):
                                treatment_data=treatment_data)
 
     def generate_html_from_tree(self, mutation_ccf_file, cluster_ccf_file, tree, abundances, sif=None, drivers=(),
-                                treatment_file=None, tumor_sizes_file=None, cnv_file=None):
+                                treatment_file=None, tumor_sizes_file=None, cnv_file=None, cluster_color_order=None):
         """
         Creates html report from Clustering and BuildTree output files
         Args:
@@ -128,6 +128,27 @@ class PhylogicOutput(object):
             cnv_file: path to cnvs file
 
         """
+        # Alter cluster colors
+        if cluster_color_order:
+            cluster_color_order = cluster_color_order.split(',')
+            default_color_list = ClusterColors.get_default_color_list()
+            needed_clusters = {int(clus): col for clus, col in
+                               zip(cluster_color_order, default_color_list[1:len(cluster_color_order)+1])}
+            remain_clusters = default_color_list[len(cluster_color_order)+1:]
+            i = 1
+            final_colors = [default_color_list[0]]  # add cluster "0" pink color
+            while needed_clusters:
+                if i in needed_clusters.keys():
+                    final_colors.append(needed_clusters.pop(i))
+                else:
+                    try:
+                        final_colors.append(remain_clusters.pop(0))
+                    except IndexError:
+                        continue
+                i += 1
+            final_colors.extend(remain_clusters)
+            ClusterColors.color_list = final_colors
+        #
         sample_names = []
         treatment_data = None
         if sif:
@@ -1397,6 +1418,7 @@ class PhylogicOutput(object):
 class ClusterColors(object):
     # Cluster colors
     color_list = [[166, 17, 129],
+                 # [211, 211, 211],  # todo remove - Gray is for unrelated clonal only
                   [39, 140, 24],
                   [103, 200, 243],
                   [248, 139, 16],
@@ -1462,6 +1484,68 @@ class ClusterColors(object):
     @classmethod
     def get_hex_string(cls, c):
         return '#{:02X}{:02X}{:02X}'.format(*cls.color_list[c])
+
+    @classmethod
+    def get_default_color_list(cls):
+        return [[166, 17, 129],
+                #[211, 211, 211],  # todo remove - Gray is for unrelated clonal only
+                  [39, 140, 24],
+                  [103, 200, 243],
+                  [248, 139, 16],
+                  [16, 49, 41],
+                  [93, 119, 254],
+                  [152, 22, 26],
+                  [104, 236, 172],
+                  [249, 142, 135],
+                  [55, 18, 48],
+                  [83, 82, 22],
+                  [247, 36, 36],
+                  [0, 79, 114],
+                  [243, 65, 132],
+                  [60, 185, 179],
+                  [185, 177, 243],
+                  [139, 34, 67],
+                  [178, 41, 186],
+                  [58, 146, 231],
+                  [130, 159, 21],
+                  [161, 91, 243],
+                  [131, 61, 17],
+                  [248, 75, 81],
+                  [32, 75, 32],
+                  [45, 109, 116],
+                  [255, 169, 199],
+                  [55, 179, 113],
+                  [34, 42, 3],
+                  [56, 121, 166],
+                  [172, 60, 15],
+                  [115, 76, 204],
+                  [21, 61, 73],
+                  [67, 21, 74],  # Additional colors, uglier and bad
+                  [123, 88, 112],
+                  [87, 106, 46],
+                  [37, 66, 58],
+                  [132, 79, 62],
+                  [71, 58, 32],
+                  [59, 104, 114],
+                  [46, 107, 90],
+                  [84, 68, 73],
+                  [90, 97, 124],
+                  [121, 66, 76],
+                  [104, 93, 48],
+                  [49, 67, 82],
+                  [71, 95, 65],
+                  [127, 85, 44],  # even more additional colors, gray
+                  [88, 79, 92],
+                  [220, 212, 194],
+                  [35, 34, 36],
+                  [200, 220, 224],
+                  [73, 81, 69],
+                  [224, 199, 206],
+                  [120, 127, 113],
+                  [142, 148, 166],
+                  [153, 167, 156],
+                  [162, 139, 145],
+                  [0, 0, 0]]  # black
 
 
 class HTMLTemplate(Template):

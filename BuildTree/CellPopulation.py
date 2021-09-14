@@ -45,7 +45,8 @@ def run_tool(args):
                                            drivers=patient_data.driver_genes,
                                            treatment_file=args.treatment_data,
                                            tumor_sizes_file=args.tumor_size,
-                                           cnv_file=args.indiv_id + '.cnvs.txt')
+                                           cnv_file=args.indiv_id + '.cnvs.txt',
+                                           cluster_color_order=args.cluster_order)
 
 
 def load_tree_edges_file(tree_tsv):
