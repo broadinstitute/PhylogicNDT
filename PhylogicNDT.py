@@ -313,6 +313,12 @@ def build_parser():
                                 action='store',
                                 type=str,
                                 help='Specify order of clusters to change cluster colors (i.e. to match other tree). Give as comma-separated string.')
+    cellpopulation.add_argument('--tree_number',
+                                dest='tree_number',
+                                action='store',
+                                type=int,
+                                help='Specify which tree to select from the ranked build_tree_posteriors (1-indexed); default is 1 (most likely tree).',
+                                default=1)
     cellpopulation.set_defaults(func=BuildTree.CellPopulation.run_tool)
 
     # GrowthKinetics  Tool

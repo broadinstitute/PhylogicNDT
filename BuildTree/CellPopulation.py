@@ -16,19 +16,21 @@ def run_tool(args):
     # try:  # if sif file is specified
     # Patient load cluster and mut ccf files
     parse_sif_file(args.sif, args.mutation_ccf_file, patient_data)
-    load_clustering_results(args.cluster_ccf_file, patient_data)
-    tree_edges = load_tree_edges_file(args.tree_tsv)
+    load_clustering_results(args.cluster_ccf_file, patient_data, args.blacklist_threshold)
+    tree_edges = load_tree_edges_file(args.tree_tsv, tree_num=args.tree_number)
     bt_engine = BuildTreeEngine(patient_data)
     tree = Tree()
     tree.init_tree_from_clustering(patient_data.ClusteringResults)
-    tree.set_new_edges(tree_edges)
+    tree.set_new_edges(tree_edges)  # requires a list of tuples (parent, child)
     patient_data.TopTree = tree
+    bt_engine.set_top_tree(tree)
     # Computing Cell Population
     cp_engine = CellPopulationEngine(patient_data, seed=args.seed)
     constrained_ccf = cp_engine.compute_constrained_ccf()
 
     cell_ancestry = bt_engine.get_cell_ancestry()
-    cell_abundance = cp_engine.get_cell_abundance(constrained_ccf)
+    cell_abundance = cp_engine.get_cell_abundance_across_samples(constrained_ccf)
+
     # Output and visualization
     import output.PhylogicOutput
     phylogicoutput = output.PhylogicOutput.PhylogicOutput()
@@ -49,11 +51,15 @@ def run_tool(args):
                                            cluster_color_order=args.cluster_order)
 
 
-def load_tree_edges_file(tree_tsv):
+def load_tree_edges_file(tree_tsv, tree_num=1):
+    """Needs to return a list of tuples in the form of (parent, child)?"""
     reader = open(tree_tsv, 'r')
     header = reader.readline()
-    top_tree = reader.readline().split('\t')[-1].strip()
-    return top_tree  # todo [(item.split('-')) for item in top_tree.split(',')]
+    for i in range(0, tree_num):
+        top_tree = reader.readline().split('\t')[-1].strip()
+    edges = [tuple([None if x == 'None' else int(x) for x in item.split('-')]) for item in top_tree.split(',')]
+    edges = [edges[-1]] + edges[:-1]
+    return edges
 
 
 def parse_sif_file(sif_file, mutation_ccf_file, patient_data):
@@ -80,7 +86,7 @@ def parse_sif_file(sif_file, mutation_ccf_file, patient_data):
                                            purity=purity)
 
 
-def load_clustering_results(cluster_info_file, patient_data):
+def load_clustering_results(cluster_info_file, patient_data, blacklist_threshold):
     from .ClusterObject import Cluster
     clustering_results = {}
     ccf_headers = ['postDP_ccf_' + str(i / 100.0) for i in range(0, 101, 1)]
@@ -95,7 +101,7 @@ def load_clustering_results(cluster_info_file, patient_data):
                 cluster_id = int(values[header['Cluster_ID']])
                 ccf = [float(values[header[i]]) for i in ccf_headers]
                 if cluster_id not in clustering_results:
-                    new_cluster = Cluster(cluster_id, sample_names)
+                    new_cluster = Cluster(cluster_id, sample_names, blacklist_threshold=blacklist_threshold)
                     clustering_results[cluster_id] = new_cluster
                     logging.debug('Added cluster {} '.format(cluster_id))
                 clustering_results[cluster_id].add_sample_density(sample_id, ccf)
