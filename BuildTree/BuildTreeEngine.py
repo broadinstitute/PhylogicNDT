@@ -52,7 +52,7 @@ class BuildTreeEngine:
             average_clusters_densities[cluster_id] = normalized_average_distribution
         return average_clusters_densities
 
-    def _most_common_tree(self):
+    def _most_common_tree(self, select):
         """ Pick the most often occurring tree """
         max_iter = 0
         most_occuring_edges = None
@@ -62,6 +62,12 @@ class BuildTreeEngine:
                 max_iter = d['n_iter']
                 most_occuring_edges = d['edges']
                 cluster_densities = d['cluster_densities']
+        if select:  # manual_selection
+            for i, d in enumerate(self._mcmc_trace):
+                print i, ": ", d['edges']
+            tree_num = input('Input desired tree number based on above edges: ')
+            most_occuring_edges = self._mcmc_trace[tree_num]['edges']
+            cluster_densities = self._mcmc_trace[tree_num]['cluster_densities']
         return most_occuring_edges, self.get_average_clusters_densities(cluster_densities)
 
     @property
@@ -97,7 +103,7 @@ class BuildTreeEngine:
 
         # return {cluster_id: cluster.hist for cluster_id, cluster in self._patient.ClusteringResults.items()}
 
-    def build_tree(self, n_iter=250, burn_in=100):
+    def build_tree(self, n_iter=250, burn_in=100, select=False):
         """ Main function to construct phylogenetic tree """
         tree = Tree()
         # Create initial tree, where each cluster is a child of the clonal cluster
@@ -128,7 +134,7 @@ class BuildTreeEngine:
                 tree.set_new_edges(tree_edges_selected)
                 # Shuffle mutations
                 shuffling(self._patient.ClusteringResults, self._patient.sample_list)
-            top_tree_edges, cluster_densities = self._most_common_tree()
+            top_tree_edges, cluster_densities = self._most_common_tree(select=select)
             for cluster_id, cluster in self._patient.ClusteringResults.items():
                 cluster.set_hist(cluster_densities[cluster_id])
             tree.set_new_edges(top_tree_edges)

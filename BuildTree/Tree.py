@@ -342,7 +342,13 @@ class Tree:
             node.remove_parent()
         # Add new edges
         for (parent_id, child_id) in new_edges:
-            self.add_edge(self._nodes[parent_id], self._nodes[child_id])
+            if child_id not in self._nodes:
+                root = child_id == 1
+                self.add_node(child_id, root=root)
+            if parent_id:
+                self.add_edge(self._nodes[parent_id], self._nodes[child_id])
+            else:
+                self.add_edge(None, self._nodes[child_id])
 
     def get_ancestry(self, node_id):
         node = self._nodes[node_id]
