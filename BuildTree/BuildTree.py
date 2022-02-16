@@ -19,7 +19,7 @@ def run_tool(args):
     patient_data.preprocess_samples()
     # Building Phylogenetic Tree
     bt_engine = BuildTreeEngine(patient_data, seed=args.seed)
-    bt_engine.build_tree(n_iter=args.n_iter)
+    bt_engine.build_tree(n_iter=args.n_iter, select=args.select_tree)
     # Output and visualization
     phylogicoutput = output.PhylogicOutput.PhylogicOutput()
     # Assign Top tree to Patient
@@ -39,6 +39,8 @@ def run_tool(args):
     cell_ancestry = bt_engine.get_cell_ancestry()
     phylogicoutput.write_constrained_ccf_tsv(constrained_ccf, cell_ancestry, args.indiv_id)
     phylogicoutput.write_cell_abundances_tsv(cell_abundance, cell_ancestry, args.indiv_id)
+    if args.cluster_ccf_trace:
+        phylogicoutput.write_cluster_ccf_trace_tsv(cp_engine.get_all_constrained_ccfs(), args.indiv_id)
     phylogicoutput.generate_html_from_tree(args.mutation_ccf_file, args.cluster_ccf_file,
                                            args.indiv_id + '_build_tree_posteriors.tsv',
                                            args.indiv_id + '_constrained_ccf.tsv',
@@ -46,7 +48,8 @@ def run_tool(args):
                                            drivers=patient_data.driver_genes,
                                            treatment_file=args.treatment_data,
                                            tumor_sizes_file=args.tumor_size,
-                                           cnv_file=args.indiv_id + '.cnvs.txt')
+                                           cnv_file=args.indiv_id + '.cnvs.txt',
+                                           cluster_color_order=args.cluster_order)
 
 
 def parse_sif_file(sif_file, mutation_ccf_file, patient_data):

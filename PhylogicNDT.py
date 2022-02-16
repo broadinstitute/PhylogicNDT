@@ -263,6 +263,19 @@ def build_parser():
                             action='append',
                             type=str,
                             help="List cluster ids to blacklist from BuildTree and CellPopulation")
+    buildtree.add_argument('--cluster_ccf_trace',
+                           dest='cluster_ccf_trace',
+                           action='store_true',
+                           help='Save MCMC trace for constrained CCF values (in addition to cell abundance trace)')
+    buildtree.add_argument('--cluster_order',
+                           dest='cluster_order',
+                           action='store',
+                           type=str,
+                           help='Specify order of clusters to change cluster colors (i.e. to match other tree). Give as comma-separated string.')
+    buildtree.add_argument('--select_tree',
+                           dest='select_tree',
+                           action='store_true',
+                           help='Specify if you desire to manually select the tree used for the CellPopulation module.')
 
     buildtree.set_defaults(func=BuildTree.BuildTree.run_tool)
 
@@ -291,6 +304,21 @@ def build_parser():
                                 dest='n_iter',
                                 default=250,
                                 help='number iterations')
+    cellpopulation.add_argument('--cluster_ccf_trace',
+                                dest='cluster_ccf_trace',
+                                action='store_true',
+                                help='Save MCMC trace for constrained CCF values (in addition to cell abundance trace)')
+    cellpopulation.add_argument('--cluster_order',
+                                dest='cluster_order',
+                                action='store',
+                                type=str,
+                                help='Specify order of clusters to change cluster colors (i.e. to match other tree). Give as comma-separated string.')
+    cellpopulation.add_argument('--tree_number',
+                                dest='tree_number',
+                                action='store',
+                                type=int,
+                                help='Specify which tree to select from the ranked build_tree_posteriors (1-indexed); default is 1 (most likely tree).',
+                                default=1)
     cellpopulation.set_defaults(func=BuildTree.CellPopulation.run_tool)
 
     # GrowthKinetics  Tool
