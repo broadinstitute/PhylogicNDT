@@ -1,5 +1,5 @@
 from bitnami/minideb
-RUN install_packages python-pip build-essential python-dev r-base r-base-dev git graphviz python-tk
+RUN install_packages python3-pip build-essential python-dev-is-python3 r-base r-base-dev git graphviz python3-tk
 RUN pip install setuptools wheel
 RUN pip install numpy scipy matplotlib pandas
 COPY req /tmp/req
