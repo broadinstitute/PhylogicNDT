@@ -1,0 +1,5 @@
+sample_id	maf_fn	seg_fn	purity	timepoint
+sample_00	ExampleData/ExampleSamples/MySimulation_0.txt		0.31	0
+sample_01	ExampleData/ExampleSamples/MySimulation_1.txt		0.685	1
+sample_02	ExampleData/ExampleSamples/MySimulation_2.txt		0.375	2
+sample_03	ExampleData/ExampleSamples/MySimulation_3.txt		0.555	3
