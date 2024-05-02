@@ -1,4 +1,4 @@
-from bitnami/minideb
+from bitnami/minideb:buster
 RUN install_packages python-pip build-essential python-dev r-base r-base-dev git graphviz python-tk
 RUN pip install setuptools wheel
 RUN pip install numpy scipy matplotlib pandas
