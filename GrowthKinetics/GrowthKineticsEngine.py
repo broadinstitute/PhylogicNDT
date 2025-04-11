@@ -30,12 +30,12 @@ class GrowthKineticsEngine:
         #cluster_rates = defaultdict(list)
         # If times of samples are not provided, treat as an integers
         if not times:
-            times = np.array(range(time_points)) + 1
+            times = np.array(list(range(time_points))) + 1
         for n in range(n_iter):
             adj_wbc = self._wbc * (1 + np.array([(np.random.random() - 0.5) / 100. for x in range(len(self._wbc))]))
             for cluster_id in range(1, n_clusters + 1):
                 cluster_abundances = []
-                for sample_name, sample_abundances in mcmc_trace_cell_abundance.items():
+                for sample_name, sample_abundances in list(mcmc_trace_cell_abundance.items()):
                     cluster_abundances.append(sample_abundances[cluster_id][n] + conv)
                 cluster_slope = linregress(times, cluster_abundances * adj_wbc).slope
                 self._growth_rates[cluster_id].append(cluster_slope)

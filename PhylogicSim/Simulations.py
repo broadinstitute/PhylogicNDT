@@ -2,7 +2,7 @@ import warnings
 
 
 def run_tool(args):
-    import SimEngine
+    from . import SimEngine
 
     if args.nsamp < 2:
         print("Minimum number of samples to simulate is 2, resetting to 2 samples.")

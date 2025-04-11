@@ -59,7 +59,7 @@ class Season():
             self.table[event_pair[1]] += 1
 
     def get_sorted_league(self):
-        self.sorted_league = sorted(self.table.items(), key=operator.itemgetter(1), reverse=True)
+        self.sorted_league = sorted(list(self.table.items()), key=operator.itemgetter(1), reverse=True)
 
     def get_event_positions(self):
         self.league_event_pos = {}
@@ -86,7 +86,7 @@ class League():
 
     ## params ##
     arm_CNVs = set([])
-    for chrom in map(str, range(23)):
+    for chrom in map(str, list(range(23))):
         arm_CNVs.add('loss_' + chrom + 'p')
         arm_CNVs.add('gain_' + chrom + 'p')
         arm_CNVs.add('loss_' + chrom + 'q')
@@ -145,7 +145,7 @@ class League():
 
         self.event_prev = {}
         if samples is not None: sample_list = samples
-        else: sample_list = self.events_per_samp.keys()
+        else: sample_list = list(self.events_per_samp.keys())
 
         if final_event_list is not None:
             for eve in final_event_list:
@@ -162,7 +162,7 @@ class League():
 
     def remove_samps_wout_event(self,event):
 
-        for samp in self.events_per_samp.keys():
+        for samp in list(self.events_per_samp.keys()):
             if event not in self.events_per_samp[samp]:
                 del self.events_per_samp[samp]
                 del self.events_per_samp_full[samp]
@@ -171,7 +171,7 @@ class League():
 
     def remove_samps_with_event(self,event):
 
-        for samp in self.events_per_samp.keys():
+        for samp in list(self.events_per_samp.keys()):
             if event in self.events_per_samp[samp]:
                 del self.events_per_samp[samp]
                 del self.events_per_samp_full[samp]
@@ -182,7 +182,7 @@ class League():
 
         n_samps = 0
         output = open(self.cohort+'.final_samples.tsv','w')
-        for samp in self.events_per_samp.keys():
+        for samp in list(self.events_per_samp.keys()):
             if samp not in samps:
                 del self.events_per_samp[samp]
                 del self.events_per_samp_full[samp]
@@ -196,7 +196,7 @@ class League():
 
     def remove_samps(self,samps):
 
-        for samp in self.events_per_samp.keys():
+        for samp in list(self.events_per_samp.keys()):
             if samp in samps:
                 del self.events_per_samp[samp]
                 del self.events_per_samp_full[samp]
@@ -205,13 +205,13 @@ class League():
 
     def get_samp_matrix_split(self,event1,event2):
 
-        samps_w_both = [samp for samp in self.events_per_samp.keys() if event1 in self.events_per_samp[samp]
+        samps_w_both = [samp for samp in list(self.events_per_samp.keys()) if event1 in self.events_per_samp[samp]
                         and event2 in self.events_per_samp[samp]]
-        samps_w_event1_only = [samp for samp in self.events_per_samp.keys() if event1 in self.events_per_samp[samp]
+        samps_w_event1_only = [samp for samp in list(self.events_per_samp.keys()) if event1 in self.events_per_samp[samp]
                         and event2 not in self.events_per_samp[samp]]
-        samps_w_event2_only = [samp for samp in self.events_per_samp.keys() if event1 not in self.events_per_samp[samp]
+        samps_w_event2_only = [samp for samp in list(self.events_per_samp.keys()) if event1 not in self.events_per_samp[samp]
                         and event2 in self.events_per_samp[samp]]
-        samps_w_neither = [samp for samp in self.events_per_samp.keys() if event1 not in self.events_per_samp[samp]
+        samps_w_neither = [samp for samp in list(self.events_per_samp.keys()) if event1 not in self.events_per_samp[samp]
                         and event2 not in self.events_per_samp[samp]]
         return samps_w_both, samps_w_event1_only, samps_w_event2_only, samps_w_neither
 
@@ -251,8 +251,8 @@ class League():
             self.gene_names[event1] = event1_gene
             self.gene_names[event2] = event2_gene
 
-            if event1 not in self.num_comp[samp].keys():self.num_comp[samp][event1] = [0, 0]
-            if event2 not in self.num_comp[samp].keys():self.num_comp[samp][event2] = [0, 0]
+            if event1 not in list(self.num_comp[samp].keys()):self.num_comp[samp][event1] = [0, 0]
+            if event2 not in list(self.num_comp[samp].keys()):self.num_comp[samp][event2] = [0, 0]
 
             sorted_pair_full = tuple(sorted([event1, event2]))
 
@@ -271,13 +271,13 @@ class League():
             else: self.mut_type[event2_gene] = 'snv'
 
     def get_samps_w_event(self,event):
-        return [samp for samp in self.events_per_samp.keys() if event in self.events_per_samp[samp]]
+        return [samp for samp in list(self.events_per_samp.keys()) if event in self.events_per_samp[samp]]
 
     # subsetting to earliest point mutations in cases of multi-hits
     def subset_to_earliest_point_mut(self):
 
         self.final_events_full = {}
-        for samp in self.events_per_samp_full.keys():
+        for samp in list(self.events_per_samp_full.keys()):
 
             self.final_events_full[samp] = []
             num_hits = {}
@@ -294,11 +294,11 @@ class League():
                     num_hits[mut_gene] += 1
                     point_muts[mut_gene].append(mut)
 
-            for mut_gene in num_hits.keys():
+            for mut_gene in list(num_hits.keys()):
                 if num_hits[mut_gene] == 1:
                     self.final_events_full[samp].append(point_muts[mut_gene][0])
                 else:
-                    earliest_mut = sorted([mut for mut in self.num_comp[samp].items() if
+                    earliest_mut = sorted([mut for mut in list(self.num_comp[samp].items()) if
                                            self.gene_names[mut[0]] == mut_gene],
                                           key = lambda x:(-x[1][1],x[1][0]))[0][0]
                     self.final_events_full[samp].append(earliest_mut)
@@ -306,9 +306,9 @@ class League():
     def update_pairwise_probs(self):
 
         self.event_pairs_per_samp = {}
-        for samp in self.event_pairs_per_samp_full.keys():
+        for samp in list(self.event_pairs_per_samp_full.keys()):
             self.event_pairs_per_samp[samp] = {}
-            for eve_pair in self.event_pairs_per_samp_full[samp].keys():
+            for eve_pair in list(self.event_pairs_per_samp_full[samp].keys()):
 
                 eve1 = eve_pair[0]
                 eve2 = eve_pair[1]
@@ -330,7 +330,7 @@ class League():
 
         num_arm = 0
         # first, add top occuring gains
-        for i,(eve,n_occur) in enumerate(sorted([x for x in self.event_prev.items()
+        for i,(eve,n_occur) in enumerate(sorted([x for x in list(self.event_prev.items())
                                                  if self.mut_type[x[0]] in ['arm_level'] and
                                                     'gain' in x[0]], key = lambda y:y[1],reverse=True)):
             if i >= num_gains_default: break
@@ -339,7 +339,7 @@ class League():
             num_arm += 1
 
         # then, add top occuring losses
-        for i,(eve,n_occur) in enumerate(sorted([x for x in self.event_prev.items()
+        for i,(eve,n_occur) in enumerate(sorted([x for x in list(self.event_prev.items())
                                                  if self.mut_type[x[0]] in ['arm_level'] and
                                                     'loss' in x[0]], key = lambda y:y[1],reverse=True)):
             if i >= num_losses_default: break
@@ -348,7 +348,7 @@ class League():
             num_arm += 1
 
         # then, add rest of arm events
-        for i,(eve,n_occur) in enumerate(sorted([x for x in self.event_prev.items()
+        for i,(eve,n_occur) in enumerate(sorted([x for x in list(self.event_prev.items())
                                                  if self.mut_type[x[0]] in ['arm_level'] and
                                                     x[0] not in final_event_list], key = lambda y:y[1],reverse=True)):
             if i+num_arm >= max_arm: break
@@ -356,7 +356,7 @@ class League():
             final_event_list.append(eve)
 
         # then, add snvs/indels
-        for i,(eve,n_occur) in enumerate(sorted([x for x in self.event_prev.items()
+        for i,(eve,n_occur) in enumerate(sorted([x for x in list(self.event_prev.items())
                                                  if self.mut_type[x[0]] in ['snv']],
                                                 key = lambda y:y[1],reverse=True)):
             if i >= max_mut: break
@@ -364,7 +364,7 @@ class League():
             final_event_list.append(eve)
 
         # then, add focal events
-        for i,(eve,n_occur) in enumerate(sorted([x for x in self.event_prev.items()
+        for i,(eve,n_occur) in enumerate(sorted([x for x in list(self.event_prev.items())
                                                  if self.mut_type[x[0]] in ['focal_level'] and
                                                     'homdel' not in x[0]], key = lambda y:y[1],reverse=True)):
             if i >= max_focal: break
@@ -372,7 +372,7 @@ class League():
             final_event_list.append(eve)
 
         # then, add homdels
-        for i,(eve,n_occur) in enumerate(sorted([x for x in self.event_prev.items()
+        for i,(eve,n_occur) in enumerate(sorted([x for x in list(self.event_prev.items())
                                                  if self.mut_type[x[0]] in ['focal_level'] and
                                                     'homdel' in x[0]], key = lambda y:y[1],reverse=True)):
             if i >= max_homdel: break
@@ -400,10 +400,10 @@ class League():
     def update_pairs_for_league_model(self,samples=None):
 
         if samples is not None: sample_list = samples
-        else: sample_list = self.event_pairs_per_samp.keys()
+        else: sample_list = list(self.event_pairs_per_samp.keys())
 
         for samp in sample_list:
-            for pair in self.event_pairs_per_samp[samp].keys():
+            for pair in list(self.event_pairs_per_samp[samp].keys()):
                 eve1,eve2 = pair
                 sorted_pair = tuple(sorted([eve1,eve2]))
                 if sorted_pair not in self.event_pairs: continue
@@ -411,7 +411,7 @@ class League():
                 self.event_pairs[sorted_pair].win_rates[eve2] += self.event_pairs_per_samp[samp][pair][(eve2,eve1)]
                 self.event_pairs[sorted_pair].win_rates['unknown'] += self.event_pairs_per_samp[samp][pair]['unknown']
 
-        for eve_pair in self.event_pairs.keys():
+        for eve_pair in list(self.event_pairs.keys()):
             eve1,eve2 = eve_pair
             if sum(self.event_pairs[eve_pair].win_rates.values()) < 2:
                 if self.event_prev[eve1] >= 4 and self.event_prev[eve2] >= 4:
@@ -420,7 +420,7 @@ class League():
                     self.event_pairs[eve_pair].win_rates[eve1] += 1
                     self.event_pairs[eve_pair].win_rates[eve2] += 1
 
-        for eve_pair in self.event_pairs.keys():
+        for eve_pair in list(self.event_pairs.keys()):
             self.event_pairs[eve_pair].calculate_rates()
 
     def run_league_model_iter(self,num_seasons):
@@ -433,7 +433,7 @@ class League():
 
             new_season = Season(self,season)
             for k in range(self.num_games_against_each_opponent):
-                for event_pair in self.event_pairs.keys():
+                for event_pair in list(self.event_pairs.keys()):
                     #if event_pair[0] not in final_event_list or event_pair[1] not in final_event_list: continue
                     multinomial_draw = list(np.random.multinomial(1, [self.event_pairs[event_pair].mut1_win_rate,
                                                                       self.event_pairs[event_pair].mut2_win_rate,
@@ -442,7 +442,7 @@ class League():
 
             new_season.get_sorted_league()
             new_season.get_event_positions()
-            for eve in new_season.league_event_pos.keys():
+            for eve in list(new_season.league_event_pos.keys()):
                 self.event_positions[eve].append(new_season.league_event_pos[eve])
             self.add_season(season)
 
@@ -452,7 +452,7 @@ class League():
         odds_dict = {}
         arr_final_pos = np.array([])
 
-        for event in self.event_positions.keys():
+        for event in list(self.event_positions.keys()):
             hist = np.array(self.event_positions[event])
             arr_final_pos = np.concatenate((arr_final_pos, hist), axis=0)
             #odds_early = ( max(float(np.size(np.where(hist < q1))),1.) / (
@@ -486,7 +486,7 @@ class League():
     def update_odds(self):
 
         odds_dict = self.calc_odds()
-        for event in odds_dict.keys():
+        for event in list(odds_dict.keys()):
             self.odds[event]['odds_early'].append(odds_dict[event]['odds_early'])
             self.odds[event]['odds_late'].append(odds_dict[event]['odds_late'])
         self.n_perms += 1
@@ -496,7 +496,7 @@ class League():
         self.run_permutation(num_seasons=num_seasons,samples=samples,final_event_list=final_event_list)
         odds_dict = self.calc_odds()
         self.odds_full_run = {}
-        for event in odds_dict.keys():
+        for event in list(odds_dict.keys()):
             self.odds_full_run[event] = {'odds_early':odds_dict[event]['odds_early'],
                                          'odds_late':odds_dict[event]['odds_late']}
         self.full_event_prev = copy.deepcopy(self.event_prev)
@@ -539,7 +539,7 @@ class League():
             sorted_medians = [(y[0],y[1]) for y in sorted([(eve,np.median(self.log_odds_full_run[eve]),
                                                             min(self.log_odds_full_run[eve]),
                                                             max(self.log_odds_full_run[eve]))
-                                                           for eve in self.log_odds_full_run.keys()],
+                                                           for eve in list(self.log_odds_full_run.keys())],
                                                           key = lambda x:(x[1],x[2],x[3]),reverse=True)]
         elif type == 'pos':
             sorted_medians = [(y[0],y[1]) for y in sorted([(eve,np.median(self.event_positions[eve]),
@@ -620,7 +620,7 @@ class League():
         ax2 = plt.subplot(gs[8:])
         plt.title('prevalence', fontsize=10)
         sns.set_style('white')
-        bars = ax2.barh(np.array(range(len(sorted_medians))),
+        bars = ax2.barh(np.array(list(range(len(sorted_medians)))),
                         [self.full_event_prev[event[0]] for event in sorted_medians], color=colors_v, align='center')
         labels = [str(int(round(
             [self.full_event_prev[event[0]] for event in

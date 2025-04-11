@@ -91,7 +91,7 @@ class Patient:
 
         self.unclustered_muts = []
 
-        self.concordant_cn_tree = {chrom: IntervalTree() for chrom in list(map(str, range(1, 23))) + ['X', 'Y']}
+        self.concordant_cn_tree = {chrom: IntervalTree() for chrom in list(map(str, list(range(1, 23)))) + ['X', 'Y']}
 
         # BuildTree
         self.TopTree = None
@@ -331,7 +331,7 @@ class Patient:
 
     def cluster_temp_removed(self):
         clust_CCF_results = self.ClusteringResults.clust_CCF_dens
-        for mut in self.sample_list[0].low_coverage_mutations.values():
+        for mut in list(self.sample_list[0].low_coverage_mutations.values()):
             mut_coincidence = np.ones(len(clust_CCF_results))
             for i, sample in enumerate(self.sample_list):
                 try:
@@ -354,14 +354,14 @@ class Patient:
                     mut.cluster_assignment = cluster_assignment
                     mut.clust_ccf = clust_CCF_results[cluster_assignment - 1][i]
             else:
-                print('Did not cluster ' + str(mut))
+                print(('Did not cluster ' + str(mut)))
                 self.unclustered_muts.append(mut.var_str)
                 for sample in self.sample_list:
                     try:
                         mut = sample.low_coverage_mutations[mut.var_str]
                         sample.unclustered_muts.append(mut)
                     except KeyError:
-                        print(mut.var_str + ' not found in ' + sample.sample_name)
+                        print((mut.var_str + ' not found in ' + sample.sample_name))
                 # for sample in self.sample_list:
                 #     mut = sample.get_mut_by_varstr(mut.var_str)
                 #     mut.cluster_assignment = None
@@ -524,7 +524,7 @@ class Patient:
 
     def get_arm_level_cn_events(self):
         n_samples = len(self.sample_list)
-        for ckey, (chrom, csize) in enumerate(zip(list(map(str, range(1, 23))) + ['X', 'Y'], CSIZE)):
+        for ckey, (chrom, csize) in enumerate(zip(list(map(str, list(range(1, 23)))) + ['X', 'Y'], CSIZE)):
             centromere = CENT_LOOKUP[ckey + 1]
             tree = IntervalTree()
             for sample in self.sample_list:
@@ -532,7 +532,7 @@ class Patient:
                     tree.update(sample.CnProfile[chrom])
             tree.split_overlaps()
             tree.merge_equals(data_initializer=[], data_reducer=lambda a, c: a + [c])
-            c_tree = IntervalTree(filter(lambda s: len(s.data) == n_samples, tree))
+            c_tree = IntervalTree([s for s in tree if len(s.data) == n_samples])
             event_segs = set()
             for seg in c_tree:
                 start = seg.begin

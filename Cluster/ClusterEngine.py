@@ -80,7 +80,7 @@ class ClusterEngine:
 
         for sample in data.sample_list:
 
-            for mut in sample.low_coverage_mutations.values():
+            for mut in list(sample.low_coverage_mutations.values()):
                 if mut.type == 'CNV':
                     combined_cnvs.add(mut)
                 else:
@@ -96,7 +96,7 @@ class ClusterEngine:
             mut_row = []
             if 'WGD' in mut.var_str:
                        for sample in data.sample_list:
-                            print (sample.WGD_status)
+                            print((sample.WGD_status))
                        for sample in data.sample_list:
                             mut_row.append(sample.get_mut_by_varstr(mut.var_str))
             if len(mut_row) < len(data.sample_names):

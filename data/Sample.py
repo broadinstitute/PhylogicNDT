@@ -269,16 +269,16 @@ class TumorSample:
 
         # check location of required columns
         # find ccf_bin locations (would need to change if other header names used)
-        ccf_bins_location = [column_loc[1] for column_loc in h.items() if "ccf_raw_" in column_loc[0]]
+        ccf_bins_location = [column_loc[1] for column_loc in list(h.items()) if "ccf_raw_" in column_loc[0]]
 
         # if "ccf_raw_" not in file look for oldstyle headers "0", "0.01", "1"
         if len(ccf_bins_location) == 0:
             ccf_bin_cols = ['0'] + list(map(str, [round(0.01 * i, 2) for i in range(1, 100)])) + ['1']
-            ccf_bins_location = [column_loc[1] for column_loc in h.items() if column_loc[0] in ccf_bin_cols]
+            ccf_bins_location = [column_loc[1] for column_loc in list(h.items()) if column_loc[0] in ccf_bin_cols]
 
         # another format
         if len(ccf_bins_location) == 0:
-            ccf_bins_location = [column_loc[1] for column_loc in h.items() if
+            ccf_bins_location = [column_loc[1] for column_loc in list(h.items()) if
                                  "ccf_0." in column_loc[0] or "ccf_1." in column_loc[0]]
 
         for line in file_in:
@@ -328,7 +328,7 @@ class TumorSample:
             std_param.append(ccf)
 
             opt_dict = {}
-            for key in self.common_field_map.keys():
+            for key in list(self.common_field_map.keys()):
                 if key in h:
                     opt_dict[self.common_field_map[key]] = spl[h[key]]
 
@@ -420,7 +420,7 @@ class TumorSample:
             else:
                 input_type = 'moo'
 
-        seg_tree = {chrom: IntervalTree() for chrom in list(map(str, range(1, 23))) + ['X', 'Y']}
+        seg_tree = {chrom: IntervalTree() for chrom in list(map(str, list(range(1, 23)))) + ['X', 'Y']}
 
         if input_type == 'none':
             return None
@@ -430,7 +430,7 @@ class TumorSample:
                 header = fh.readline().strip('\n').split('\t')
                 for line in fh:
                     try:
-                        row = dict(zip(header, line.strip('\n').split('\t')))
+                        row = dict(list(zip(header, line.strip('\n').split('\t'))))
                         chrN = row['Chromosome']
                         start = int(float(row['Start.bp']))
                         end = int(float(row['End.bp']))
@@ -457,7 +457,7 @@ class TumorSample:
                 header = fh.readline().strip('\n').split('\t')
                 for line in fh:
                     try:
-                        row = dict(zip(header, line.strip('\n').split('\t')))
+                        row = dict(list(zip(header, line.strip('\n').split('\t'))))
                         chrN = row['Chromosome']
                         start = int(float(row['Start']))
                         end = int(float(row['End']))
@@ -471,7 +471,7 @@ class TumorSample:
                 header = fh.readline().strip('\n').split('\t')
                 for line in fh:
                     try:
-                        row = dict(zip(header, line.strip('\n').split('\t')))
+                        row = dict(list(zip(header, line.strip('\n').split('\t'))))
                         chrN = row['Chromosome']
                         if chrN == '23':
                             chrN = 'X'

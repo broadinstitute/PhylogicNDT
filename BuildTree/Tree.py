@@ -7,7 +7,7 @@ if __package__ is None:
     import sys
     from os import path
     sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
-    from Node import Node
+    from .Node import Node
 else:
     from .Node import Node
 
@@ -33,14 +33,14 @@ class Tree:
 
     def init_tree_from_clustering(self, clustering_results):
         """ Initialize Tree object with clustering results """
-        for cluster_id, cluster in clustering_results.items():
+        for cluster_id, cluster in list(clustering_results.items()):
             if not cluster.blacklisted:
                 self.add_node(cluster.identifier, data=cluster)
         # TODO find clonal cluster and set it as a root
         root = self.nodes[CLONAL_CLUSTER]
         self.set_root(root)
         # add edges (initially all edges are children of Clonal cluster)
-        for identifier, node in self.nodes.items():
+        for identifier, node in list(self.nodes.items()):
             if identifier != CLONAL_CLUSTER:
                 self.add_edge(root, node)
         logging.debug('Tree initialized with edges {}'.format(self.edges))
@@ -49,7 +49,7 @@ class Tree:
         """
         Tree object representation
         """
-        return repr(self._edges), [repr(node) for identifier, node in self._nodes.items()]
+        return repr(self._edges), [repr(node) for identifier, node in list(self._nodes.items())]
 
     def add_edge(self, parent, child):
         """
@@ -135,7 +135,7 @@ class Tree:
         :returns any node in the Tree except Clonal
         """
         # avoid picking clonal cluster (1)
-        nodes_to_choose = [n for n in self._nodes.keys() if n != self._root.identifier]
+        nodes_to_choose = [n for n in list(self._nodes.keys()) if n != self._root.identifier]
         return self._nodes[np.random.choice(nodes_to_choose)]
 
     def add_nodes(self, nodes):
@@ -172,7 +172,7 @@ class Tree:
 
     def _calc_tree_lik_detailed(self, time_points):
         node_llhood = []
-        for identifier, node in self._nodes.items():
+        for identifier, node in list(self._nodes.items()):
             parent = node.parent
             siblings = node.siblings
             if parent and len(siblings) == 0:
@@ -301,7 +301,7 @@ class Tree:
         # Remove node from it's position the Tree
         self.remove_edges_for_node(node_to_move)
         # Get list of all potential parents (except the root and itself)
-        potential_parents = [(node_id, node) for node_id, node in self._nodes.items()
+        potential_parents = [(node_id, node) for node_id, node in list(self._nodes.items())
                              if node_id != node_to_move.identifier]
         # Iterate over all potential parents (pp), except root
         for (pp_id, pp_node) in potential_parents:
@@ -335,10 +335,10 @@ class Tree:
     def set_new_edges(self, new_edges):
         self._edges = []
         # Clear out children's lists, children will be added in add_edge function
-        for node_id, node in self._nodes.items():
+        for node_id, node in list(self._nodes.items()):
             node.remove_all_children()
         # Clear out pointer to parent for each Node
-        for node_id, node in self._nodes.items():
+        for node_id, node in list(self._nodes.items()):
             node.remove_parent()
         # Add new edges
         for (parent_id, child_id) in new_edges:

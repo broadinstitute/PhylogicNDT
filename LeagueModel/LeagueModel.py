@@ -2,7 +2,7 @@ from .LeagueModelData import Eve_Pair, Season, League
 
 def run_league_model(args):
     import pandas as pd
-    import cPickle as pkl
+    import pickle as pkl
     import random
     import matplotlib.pyplot as plt
     import logging
@@ -122,7 +122,7 @@ def run_league_model(args):
     out_fn = args.cohort + '.log_odds.tsv'
     with open(out_fn, 'w') as output:
         output.write('cohort\tevent\tevent_split\ttype\tperm_run\tlog_odds_early\n')
-        for eve in league_model_run.log_odds_full_run.keys():
+        for eve in list(league_model_run.log_odds_full_run.keys()):
             for j, odds in enumerate(league_model_run.log_odds_full_run[eve]):
                 if args.keep_samps_w_event is not None:
                     output.write(args.cohort + '\t' + eve + '\t' + str(j) + '\t' + str(
@@ -142,7 +142,7 @@ def run_league_model(args):
 
 def run_league_model_ipython_notebook(args):
     import pandas as pd
-    import cPickle as pkl
+    import pickle as pkl
     import random
     import matplotlib.pyplot as plt
     import logging
@@ -261,7 +261,7 @@ def run_league_model_ipython_notebook(args):
     out_fn = args.cohort + '.log_odds.tsv'
     with open(out_fn, 'w') as output:
         output.write('cohort\tevent\tevent_split\ttype\tperm_run\tlog_odds_early\n')
-        for eve in league_model_run.log_odds_full_run.keys():
+        for eve in list(league_model_run.log_odds_full_run.keys()):
             for j, odds in enumerate(league_model_run.log_odds_full_run[eve]):
                 if args.keep_samps_w_event is not None:
                     output.write(args.cohort + '\t' + eve + '\t' + str(j) + '\t' + str(

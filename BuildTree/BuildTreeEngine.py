@@ -34,7 +34,7 @@ class BuildTreeEngine:
     def _add_dictionary(old_dict, new_dict):
         """ Merge list of dictionaries with repeated keys
             where key - cluster id and value is list of cluster densities """
-        for key, value in new_dict.items():
+        for key, value in list(new_dict.items()):
             if key in old_dict:
                 old_dict[key].extend(value)
             else:
@@ -46,7 +46,7 @@ class BuildTreeEngine:
         """ Averages and normalizes clusters densities across MCMC iterations with similar Trees"""
         from sklearn.preprocessing import normalize
         average_clusters_densities = {}
-        for cluster_id, cluster_ccf_list in clusters_densities.items():
+        for cluster_id, cluster_ccf_list in list(clusters_densities.items()):
             average_density = sum(cluster_ccf_list) / float(len(cluster_ccf_list)) + conv
             normalized_average_distribution = average_density
             average_clusters_densities[cluster_id] = normalized_average_distribution
@@ -91,7 +91,7 @@ class BuildTreeEngine:
     def _collect_cluster_densities(self):
         # TODO: check that cluster densities are not changing
         cluster_densities = {}
-        for cluster_id, cluster in self._patient.ClusteringResults.items():
+        for cluster_id, cluster in list(self._patient.ClusteringResults.items()):
             cluster_densities[cluster_id] = [cluster.hist]
         return cluster_densities
 
@@ -129,7 +129,7 @@ class BuildTreeEngine:
                 # Shuffle mutations
                 shuffling(self._patient.ClusteringResults, self._patient.sample_list)
             top_tree_edges, cluster_densities = self._most_common_tree()
-            for cluster_id, cluster in self._patient.ClusteringResults.items():
+            for cluster_id, cluster in list(self._patient.ClusteringResults.items()):
                 cluster.set_hist(cluster_densities[cluster_id])
             tree.set_new_edges(top_tree_edges)
         else:

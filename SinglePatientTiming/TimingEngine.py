@@ -8,11 +8,11 @@ import random
 from data.Enums import CSIZE, CENT_LOOKUP
 
 #TODO: get rid of these globals
-_chromosomes = tuple(map(str, range(1, 23))) + ('X',)
+_chromosomes = tuple(map(str, list(range(1, 23)))) + ('X',)
 _arms = 'pq'
 _cn_state_whitelist = frozenset({(1., 2.), (0., 2.), (2., 2.)})
-CSIZE = dict(zip(_chromosomes, CSIZE))
-CENT_LOOKUP = {str(c): v for c, v in CENT_LOOKUP.items()}
+CSIZE = dict(list(zip(_chromosomes, CSIZE)))
+CENT_LOOKUP = {str(c): v for c, v in list(CENT_LOOKUP.items())}
 CENT_LOOKUP['X'] = CENT_LOOKUP['23']
 
 
@@ -123,7 +123,7 @@ class TimingEngine(object):
                     regions_supporting_WGD.append(TimingCNState([self], cn_state.chrN, cn_state.arm,
                         (cn_state.cn_a1, cn_state.cn_a2), cn_state.purity, supporting_muts=cn_state.supporting_muts))
         self.WGD = TimingWGD(supporting_arm_states=regions_supporting_WGD)
-        for cn_state in self.concordant_cn_states.values():
+        for cn_state in list(self.concordant_cn_states.values()):
             cn_state.call_events(wgd=True)  # call copy number events relative to WGD
 
     def get_mutations(self):
@@ -156,7 +156,7 @@ class TimingEngine(object):
         self.truncal_cn_events = {gl + chrN + arm: [] for gl, (chrN, arm) in itertools.product(('gain_', 'loss_'), self.arm_regions)}
         self.all_cn_events = {gl + chrN + arm: [] for gl, (chrN, arm) in itertools.product(('gain_', 'loss_'), self.arm_regions)}
         cluster_ccfs = self._get_cluster_ccfs()
-        sample_idx = range(len(self.sample_list))
+        sample_idx = list(range(len(self.sample_list)))
         for cn_state in self.concordant_cn_states:
             for i, eve in enumerate(self.concordant_cn_states[cn_state].cn_events):
                 ccf_hats = []
@@ -177,7 +177,7 @@ class TimingEngine(object):
     def _get_cluster_ccfs(self):
         n_samples = len(self.sample_list)
         cluster_ccfs = {}
-        for mut in self.mutations.values():
+        for mut in list(self.mutations.values()):
             c = mut.cluster_assignment
             if c is not None:
                 cluster_ccfs.setdefault(c, np.zeros((n_samples, 101)))
@@ -195,7 +195,7 @@ class TimingEngine(object):
         subclonal_dist[100] = 1.
         if self.WGD is not None:
             self.WGD.get_pi_dist()
-            for mut in self.mutations.values():
+            for mut in list(self.mutations.values()):
                 if mut.is_clonal:
                     mut.get_pi_dist(self.WGD)
             for cn_event_name in self.all_cn_events:
@@ -219,7 +219,7 @@ class TimingEngine(object):
                                 mut.get_pi_dist(cn_event)
                     else:
                         cn_event.pi_dist = uniform_dist
-        for mut in self.mutations.values():
+        for mut in list(self.mutations.values()):
             if mut.pi_dist is None:
                 if mut.is_clonal:
                     mut.pi_dist = uniform_dist
@@ -273,7 +273,7 @@ class TimingSample(object):
             self.mut_lookup_table = {}
         else:
             self.concordant_mutation_intervaltree = {chrom: IntervalTree() for chrom in self._chromosomes}
-        for mut in itertools.chain(self.sample.mutations, self.sample.low_coverage_mutations.values()):
+        for mut in itertools.chain(self.sample.mutations, list(self.sample.low_coverage_mutations.values())):
             if mut.chrN in self.mutation_intervaltree and (concordant_muts is None or mut.var_str in concordant_muts):
                 segs = self.CnProfile[mut.chrN][mut.pos]
                 if segs:
@@ -332,7 +332,7 @@ class TimingSample(object):
                 state_tuple = (cn_a1, cn_a2)
                 state_bps.setdefault(state_tuple, 0)
                 state_bps[state_tuple] += seg_len
-            states_over_threshold = [cn for cn, bp in state_bps.items() if bp > arm_bp * size_threshold]
+            states_over_threshold = [cn for cn, bp in list(state_bps.items()) if bp > arm_bp * size_threshold]
             if arm_bp < true_arm_bp * .5:  # Only call if at least 50% of arm is in segs
                 self.missing_arms.append((chrN, arm))
             elif len(states_over_threshold) == 1:
@@ -361,15 +361,15 @@ class TimingSample(object):
         if use_concordant_states:
             if self.WGD is None:
                 return
-            for cn_state in self.concordant_cn_states.values():
+            for cn_state in list(self.concordant_cn_states.values()):
                 if cn_state.cn_a1 == 0 or cn_state.cn_a1 >= 2 and cn_state.cn_a2 >= 2:  # region supports WGD if 0/2 or 2/2
                     supporting_arm_states.append(TimingCNState([self], cn_state.chrN, cn_state.arm,
                         (cn_state.cn_a1, cn_state.cn_a2), cn_state.purity, supporting_muts=cn_state.supporting_muts))
             self.concordant_WGD = TimingWGD(supporting_arm_states=supporting_arm_states)
-            for cn_state in self.concordant_cn_states.values():
+            for cn_state in list(self.concordant_cn_states.values()):
                 cn_state.call_events(wgd=True)
         else:
-            for cn_state in self.cn_states.values():
+            for cn_state in list(self.cn_states.values()):
                 if cn_state.cn_a2 >= 2:
                     supporting_arm_states.append(cn_state)
                 if (cn_state.cn_a1 == 0 or cn_state.cn_a1 >= 2) and cn_state.cn_a2 >= 2:  # region supports WGD if 0/2 or 2/2
@@ -381,7 +381,7 @@ class TimingSample(object):
                 supporting_arm_states = [TimingCNState([self], s.chrN, s.arm, (s.cn_a1, s.cn_a2), s.purity, supporting_muts=s.supporting_muts) for
                                          s in supporting_arm_states]
                 self.WGD = TimingWGD(supporting_arm_states=supporting_arm_states)
-                for cn_state in self.cn_states.values():
+                for cn_state in list(self.cn_states.values()):
                     cn_state.call_events(wgd=True)
 
     def get_arm_level_cn_events(self, use_concordant_states=False):
@@ -392,7 +392,7 @@ class TimingSample(object):
             self.concordant_cn_events = {gl + chrN + arm: [] for gl, (chrN, arm) in itertools.product(('gain_', 'loss_'), self.arm_regions)}
         else:
             self.cn_events = {gl + chrN + arm: [] for gl, (chrN, arm) in itertools.product(('gain_', 'loss_'), self.arm_regions)}
-        for state in self.cn_states.values():
+        for state in list(self.cn_states.values()):
             for eve in state.cn_events:
                 if use_concordant_states:
                     self.concordant_cn_events[eve.event_name].append(eve)
@@ -507,7 +507,7 @@ class TimingCNEvent(object):
         self.pi_dist = pi_dist
         self.timing_info = []
         self.copy_number = copy_number
-        self.cn_a1, self.cn_a2 = map(float, self.copy_number.split('/'))
+        self.cn_a1, self.cn_a2 = list(map(float, self.copy_number.split('/')))
         self.allelic_cn = allelic_cn
         self.total_cn = self.cn_a1 + self.cn_a2
         self.supporting_muts = supporting_muts if (supporting_muts is not None) else []

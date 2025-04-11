@@ -15,7 +15,7 @@ def logsum_of_marginals_per_sample(loghist):
 
 
 def shuffling(clustering_results, sample_list):
-    for cluster_idx, cluster in clustering_results.items():
+    for cluster_idx, cluster in list(clustering_results.items()):
         cluster.reset_counts()
     count_moved_mutations = 0
     mutations = sample_list[0].concordant_variants
@@ -27,7 +27,7 @@ def shuffling(clustering_results, sample_list):
         pre_cluster_assignment = mut.cluster_assignment
         mut_nd_hist = clustering_results[pre_cluster_assignment].mutations[mut]
 
-        for cluster_idx, cluster in clustering_results.items():
+        for cluster_idx, cluster in list(clustering_results.items()):
             # Skip if the current point is the only thing in the cluster
             if cluster.cluster_size == 1 and mut.cluster_assignment == cluster_idx:
                 logging.debug('Cluster {} has one mutation {}'.format(cluster.identifier, mut))
@@ -56,7 +56,7 @@ def shuffling(clustering_results, sample_list):
             mut.cluster_assignment = new_cluster_idx
     logging.debug(
         'Moved {} mutations out of {} mutations to new clusters'.format(count_moved_mutations, len(mutations)))
-    for cluster_idx, cluster in clustering_results.items():
+    for cluster_idx, cluster in list(clustering_results.items()):
         logging.debug('Cluster {}, mutations added={}, removed={}'.format(cluster_idx,
                                                                           cluster._iter_count_added,
                                                                           cluster._iter_count_removed))

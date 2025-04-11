@@ -59,7 +59,7 @@ def run_tool(args):
     else:  # if sample names/files are specified directly on cmdline
 
         # sort order on timepoint or order of entry on cmdline if not present
-        print(args.sample_data)
+        print((args.sample_data))
         for idx, sample_entry in enumerate(args.sample_data):
             ##for now, assume input order is of the type sample_id\tmaf_fn\tseg_fn\tpurity\ttimepoint
             smpl_spec = sample_entry.strip('\n').split(':')

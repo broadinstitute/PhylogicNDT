@@ -76,7 +76,7 @@ class DpEngine:
         if N_iter == 0:
             return None
 
-        mut_iter = data.iteritems()
+        mut_iter = iter(data.items())
         s_cluster = DP_cluster(self, DP_item(next(mut_iter)[0], self))
 
         for label, mut_hist in mut_iter:
@@ -102,7 +102,7 @@ class DpEngine:
         cluster_out["var_loc"] = var_loc
         logging.debug("assignments:" + str(cluster_out["assign"]))
         self.results.debug_outputs.append(self.results.assign[:])
-        for key, value in cluster_out.items():
+        for key, value in list(cluster_out.items()):
             setattr(self.results, key, value)
 
     def get_results(self):
@@ -170,7 +170,7 @@ class DpEngine:
         self.results.clust_size.append([len(cluster) for cluster in self.clusterlist])
         self.results.K.append(self.n_clusters)
 
-        print("{}({});".format(self.n_clusters, round(self.alpha, 1)),)
+        print(("{}({});".format(self.n_clusters, round(self.alpha, 1)),))
         sys.stdout.flush()
 
         if resample:
@@ -242,7 +242,7 @@ class DpEngine:
         # Flatten for TSNE and summary.
         log_data_flattened = []
 
-        for label, mutation in self.data.iteritems():
+        for label, mutation in self.data.items():
             log_data_flattened.append(mutation.flatten())
 
         '''Normalize for TSNE'''
@@ -280,15 +280,15 @@ class DpEngine:
 
         # Now we have to sort the cluster densities and the assignments.
         cluster_max = [sum(np.argmax(x.reshape(-1, grid_size), axis=1)) for x in cluster_dens]
-        new_cluster_order = sorted(range(1, len(cluster_dens) + 1), key=lambda x: cluster_max[x - 1], reverse=True)
+        new_cluster_order = sorted(list(range(1, len(cluster_dens) + 1)), key=lambda x: cluster_max[x - 1], reverse=True)
 
         assign_sorted = np.array(assign, copy=True)
         for cluster_idx_sorted, cluster_idx in enumerate(new_cluster_order):
             assign_sorted[assign == cluster_idx] = cluster_idx_sorted + 1
 
-        _, cluster_dens_sorted = zip(*sorted(enumerate(cluster_dens), key=lambda x: cluster_max[x[0]], reverse=True))
-        _, mcmc_clust_dens_sorted = zip(
-            *sorted(enumerate(mcmc_clust_dens), key=lambda x: cluster_max[x[0]], reverse=True))
+        _, cluster_dens_sorted = list(zip(*sorted(enumerate(cluster_dens), key=lambda x: cluster_max[x[0]], reverse=True)))
+        _, mcmc_clust_dens_sorted = list(zip(
+            *sorted(enumerate(mcmc_clust_dens), key=lambda x: cluster_max[x[0]], reverse=True)))
 
         # assign sorted densities back over the originals
         cluster_dens = cluster_dens_sorted
@@ -483,7 +483,7 @@ class ClusteringResults:
     def _create_from_dict(cls, legacy_dict):
         # logging.warning("!!! Creating results object from dictionary, this functionality will be removed. !!!")
         res_obj = cls()
-        for key, value in legacy_dict.iteritems():
+        for key, value in legacy_dict.items():
             setattr(res_obj, key, value)
         return res_obj
 
@@ -594,12 +594,12 @@ def get_gamma_prior_from_k_prior(N, k_0_map, k_prior):
 
         return divergence
 
-    sigma_grid = range(1, 25, 5)
-    mu_grid = range(1, 25, 5)
+    sigma_grid = list(range(1, 25, 5))
+    mu_grid = list(range(1, 25, 5))
     obj = np.ones([len(sigma_grid), len(mu_grid)]) * np.nan
     mode_vals = np.ones([len(sigma_grid) * len(mu_grid), 3]) * np.nan
 
-    int_k_prior = np.interp(k_0_map[:, 0], range(1, N + 1), k_prior)
+    int_k_prior = np.interp(k_0_map[:, 0], list(range(1, N + 1)), k_prior)
     int_k_prior = int_k_prior / float(np.sum(int_k_prior))
 
     for i in range(len(sigma_grid)):
@@ -610,7 +610,7 @@ def get_gamma_prior_from_k_prior(N, k_0_map, k_prior):
             val = res.x
             obj[i, j] = LL(val, N, int_k_prior)
             mode_vals[(i - 2) * len(mu_grid) + j, :] = np.append(val, obj[i, j])
-            print
+            print()
             '.',
 
     logging.info("")
@@ -655,7 +655,7 @@ def summarize_mut_locations(DP_res, N_burn):
     logging.info("N Clusters = {}".format(K))
 
     b = np.array(DP_res["K"])  # <= K
-    indices = np.array(range(len(b)))
+    indices = np.array(list(range(len(b))))
     indices = indices[np.logical_and(indices > N_burn, b == K)]
 
     for i in indices:
@@ -727,20 +727,20 @@ def get_k_0_map(N, gamma_GRID, log_stirling_coef):
     for i in range(N_gamma):
         DP_prob[i, :] = DP_prob_k_cond_alpha_N(N, gamma_GRID[i],
                                                log_stirling_coef)  ## Escobar and West 1995 for DP loglik eqn 10.
-        k_0_map[i, 0] = np.sum(DP_prob[i, :] * np.array(range(1, N + 1)))
+        k_0_map[i, 0] = np.sum(DP_prob[i, :] * np.array(list(range(1, N + 1))))
 
     return (k_0_map)
 
 
 def init_dp_prior(N, Pi_k):
-    k_prior = stats.nbinom.pmf(range(1, N + 1), Pi_k["r"], Pi_k["r"] / float(Pi_k["r"] + Pi_k[
+    k_prior = stats.nbinom.pmf(list(range(1, N + 1)), Pi_k["r"], Pi_k["r"] / float(Pi_k["r"] + Pi_k[
         "mu"]))  # stats.nbinom.pmf(range(1,N+1),Pi_k["mu"]+ Pi_k["mu"]**2/float(Pi_k["r"]), Pi_k["r"]/float(Pi_k["r"]+Pi_k["mu"]) )
 
     k_prior = k_prior / sum(k_prior)
 
     logging.info("Initializing prior over DP k for " + str(N) + " items")
 
-    log_stirling_coef = get_log_stirling_coefs(range(1, N + 1))
+    log_stirling_coef = get_log_stirling_coefs(list(range(1, N + 1)))
 
     GMAX = 5
     grid = np.linspace(1e-25, GMAX, 1000)

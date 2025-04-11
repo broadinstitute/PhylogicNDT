@@ -91,11 +91,11 @@ class CellPopulationEngine:
     def _compute_sample_constrained_ccf(self, sample_clusters_ccf, sample_id, tree_levels, n_iter=250, burn_in=100):
         """ For each cluster computes constrained density and samples ccf from that density
             :returns the most frequent ccf guration for the sample across all iterations """
-        hist = range(101)
+        hist = list(range(101))
         sample_mcmc_trace = []
         for i in range(n_iter + burn_in):
             logging.debug('Iteration {}'.format(i))
-            iter_ccf = dict.fromkeys(itertools.chain(self._top_tree.nodes.keys()), 0.0)
+            iter_ccf = dict.fromkeys(itertools.chain(list(self._top_tree.nodes.keys())), 0.0)
             # Traverse tree from root to it's leaves
             for level in tree_levels:
                 level_nodes = tree_levels[level]
@@ -113,14 +113,14 @@ class CellPopulationEngine:
     def _get_sample_clusters_densities(self, sample_id):
         """ For each sample ID returns dictionary of clusters and their densities for this sample """
         sample_clusters_densities = {}
-        for cluster_id, cluster in self._clustering_results.items():
+        for cluster_id, cluster in list(self._clustering_results.items()):
             sample_clusters_densities[cluster_id] = cluster.hist[sample_id]
         return sample_clusters_densities
 
     def get_all_cell_abundances(self):
         """ For each MCMC iteration computes cell abundances """
         all_cell_abundances = {}
-        for sample_id, sample_constrained_ccf in self._all_configurations.items():
+        for sample_id, sample_constrained_ccf in list(self._all_configurations.items()):
             all_cell_abundances[sample_id] = []
             for iteration, constrained_ccf in enumerate(sample_constrained_ccf):
                 all_cell_abundances[sample_id].append(self.get_cell_abundance(constrained_ccf))
@@ -129,7 +129,7 @@ class CellPopulationEngine:
     def get_cell_abundance_across_samples(self, constrained_ccf):
         """ For each sample computes cell abundances for each cluster """
         cell_abundances_across_samples = {}
-        for sample_id, sample_constrained_ccf in constrained_ccf.items():
+        for sample_id, sample_constrained_ccf in list(constrained_ccf.items()):
             sample_cell_abundance = self.get_cell_abundance(sample_constrained_ccf)
             cell_abundances_across_samples[sample_id] = sample_cell_abundance
             logging.debug('Cell abundance for sample {} \n {}'.format(sample_id, sample_cell_abundance))
@@ -139,8 +139,8 @@ class CellPopulationEngine:
         """ Adjusts constrained ccf to represent cell population according to phylogenetic tree """
         # Have to convert to dictionary, in case list of tuples is passed
         sample_constrained_ccfs = dict(sample_constrained_ccfs)
-        sample_cell_abundance = {key: 0 for key, value in sample_constrained_ccfs.items()}
-        for node_id, node_ccf in sample_constrained_ccfs.items():
+        sample_cell_abundance = {key: 0 for key, value in list(sample_constrained_ccfs.items())}
+        for node_id, node_ccf in list(sample_constrained_ccfs.items()):
             node = self._top_tree.nodes[node_id]
             parent = node.parent
             if parent:
@@ -152,16 +152,16 @@ class CellPopulationEngine:
                 logging.debug('Node {} has no parent'.format(node_id))
             sample_cell_abundance[node_id] += node_ccf
         # check that cancer cell population in the sample sums up to 100%
-        assert sum([a for cl, a in sample_cell_abundance.items()]) <= 100.0
+        assert sum([a for cl, a in list(sample_cell_abundance.items())]) <= 100.0
         return sample_cell_abundance
 
     @staticmethod
     def _get_most_frequent_configuration(constrained_ccfs_configs):
         sorted_config = []
         for d in constrained_ccfs_configs:
-            sorted_config.append(tuple(sorted(d.items(), key=operator.itemgetter(1))))
+            sorted_config.append(tuple(sorted(list(d.items()), key=operator.itemgetter(1))))
         counts = collections.Counter(sorted_config)
-        most_frequent = sorted(counts.items(), key=operator.itemgetter(1), reverse=True)[0]
+        most_frequent = sorted(list(counts.items()), key=operator.itemgetter(1), reverse=True)[0]
         return sorted(most_frequent[0], key=operator.itemgetter(0)), most_frequent[1]
 
     def compute_constrained_ccf(self, n_iter=250):

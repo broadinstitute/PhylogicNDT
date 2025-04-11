@@ -17,7 +17,7 @@ def run_tool(args):
         with open(args.sif, 'r') as sif_file:
             header = sif_file.readline().strip('\n').split('\t')
             for line in sif_file:
-                row = dict(zip(header, line.strip('\n').split('\t')))
+                row = dict(list(zip(header, line.strip('\n').split('\t'))))
                 sample_id = row['sample_id']
                 maf_fn = row['maf_fn']
                 seg_fn = row['seg_fn']
@@ -30,7 +30,7 @@ def run_tool(args):
     else:  # if sample names/files are specified directly on cmdline
 
         # sort order on timepoint or order of entry on cmdline if not present
-        print(args.sample_data)
+        print((args.sample_data))
         for idx, sample_entry in enumerate(args.sample_data):
             ##for now, assume input order is of the type sample_id\tmaf_fn\tseg_fn\tpurity\ttimepoint
             smpl_spec = sample_entry.strip('\n').split(':')
@@ -65,8 +65,8 @@ def compare_events(timing_engine, drivers=()):
     all_events = []
     if timing_engine.WGD:
         all_events.append(timing_engine.WGD)
-    all_events.extend(itertools.chain(*timing_engine.all_cn_events.values()))
-    all_events.extend(mut for mut in timing_engine.mutations.values() if
+    all_events.extend(itertools.chain(*list(timing_engine.all_cn_events.values())))
+    all_events.extend(mut for mut in list(timing_engine.mutations.values()) if
                       mut.prot_change and mut.gene in drivers and (mut.prot_change[0] != mut.prot_change[-1]
                       or not mut.prot_change[-1].isalpha()))
     comps = {}

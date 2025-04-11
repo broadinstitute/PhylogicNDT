@@ -94,7 +94,7 @@ def load_clustering_results(cluster_info_file, patient_data, blacklist_threshold
         blacklist_cluster = [int(c) for c in blacklist_cluster]
     else:
         blacklist_cluster = []
-    for cluster_id, cluster in clustering_results.items():
+    for cluster_id, cluster in list(clustering_results.items()):
         if cluster_id in blacklist_cluster:
             # If need to force cluster to be blacklisted regardless of ccf
             cluster.set_blacklist_status(check_ccf=False)
@@ -110,6 +110,6 @@ def load_clustering_results(cluster_info_file, patient_data, blacklist_threshold
             if mutation not in mutations_nd_hist:
                 mutations_nd_hist[mutation] = []
             mutations_nd_hist[mutation].append(mutation.ccf_1d)
-    for mutation, mutation_nd_hist in mutations_nd_hist.items():
+    for mutation, mutation_nd_hist in list(mutations_nd_hist.items()):
         clustering_results[mutation.cluster_assignment].add_mutation(mutation, mutation_nd_hist)
     patient_data.ClusteringResults = clustering_results

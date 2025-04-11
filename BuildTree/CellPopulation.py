@@ -96,7 +96,7 @@ def load_clustering_results(cluster_info_file, patient_data):
                     clustering_results[cluster_id] = new_cluster
                     logging.debug('Added cluster {} '.format(cluster_id))
                 clustering_results[cluster_id].add_sample_density(sample_id, ccf)
-    for cluster_id, cluster in clustering_results.items():
+    for cluster_id, cluster in list(clustering_results.items()):
         cluster.set_blacklist_status()
         clustering_results[cluster_id] = cluster
 

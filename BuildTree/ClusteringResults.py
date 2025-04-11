@@ -110,7 +110,7 @@ class ClusteringResults:
 
     def _create_clusters(self, cluster_info_file):
         clusters_ccf = self._load_clusters(cluster_info_file)
-        for cluster_id, densities in clusters_ccf.items():
+        for cluster_id, densities in list(clusters_ccf.items()):
             if cluster_id not in self._removed_clusters:
                 self._clusters[cluster_id] = Cluster(cluster_id, densities=densities)
                 logging.debug('Created cluster {} '.format(cluster_id))
