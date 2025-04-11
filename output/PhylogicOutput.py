@@ -44,10 +44,10 @@ class PhylogicOutput(object):
         if len(set(time_points)) < len(time_points):
             time_points = []
         cluster_dict = {c: {'muts': {}, 'cnvs': {}} for c in range(1, len(results.clust_CCF_dens) + 1)}
-        n_muts = dict.fromkeys(range(1, len(results.clust_CCF_dens) + 1), 0)
+        n_muts = dict.fromkeys(list(range(1, len(results.clust_CCF_dens) + 1)), 0)
         c_drivers = {c: [] for c in range(1, len(results.clust_CCF_dens) + 1)}
         for i, sample in enumerate(patient.sample_list):
-            for mut in itertools.chain(sample.mutations, sample.low_coverage_mutations.values()):
+            for mut in itertools.chain(sample.mutations, list(sample.low_coverage_mutations.values())):
                 if hasattr(mut, 'cluster_assignment') and mut.cluster_assignment:
                     c = mut.cluster_assignment
                     if mut.type == 'CNV':
@@ -102,7 +102,7 @@ class PhylogicOutput(object):
             with open(treatment_file, 'r') as f:
                 header = f.readline().strip('\n\r').split('\t')
                 for line in f:
-                    fields = dict(zip(header, line.strip('\n\r').split('\t')))
+                    fields = dict(list(zip(header, line.strip('\n\r').split('\t'))))
                     treatment_data.append({'tx': fields['tx'],
                                            'tx_start': float(fields['tx_start']),
                                            'tx_end': float(fields['tx_end']) if fields['tx_end'] else time_points[-1]})
@@ -135,11 +135,11 @@ class PhylogicOutput(object):
             with open(sif, 'r') as sif_file:
                 header = sif_file.readline().strip('\n\r').lower().split('\t')
                 for line in sif_file:
-                    fields = dict(zip(header, line.strip('\n\r').split('\t')))
+                    fields = dict(list(zip(header, line.strip('\n\r').split('\t'))))
                     sample_names.append(fields['sample_id'])
                     timepoints.append(float(fields['timepoint']) if fields['timepoint'] else np.nan)
             if np.all(~np.isnan(timepoints)) and len(set(timepoints)) == len(sample_names):
-                sorting_idx = sorted(range(len(sample_names)), key=lambda k: timepoints[k])
+                sorting_idx = sorted(list(range(len(sample_names))), key=lambda k: timepoints[k])
                 sample_names = [sample_names[i] for i in sorting_idx]
                 timepoints = [timepoints[i] for i in sorting_idx]
                 if treatment_file:
@@ -147,7 +147,7 @@ class PhylogicOutput(object):
                     with open(treatment_file, 'r') as f:
                         header = f.readline().strip('\n\r').split('\t')
                         for line in f:
-                            fields = dict(zip(header, line.strip('\n\r').split('\t')))
+                            fields = dict(list(zip(header, line.strip('\n\r').split('\t'))))
                             treatment_data.append({'tx': fields['tx'],
                                                    'tx_start': float(fields['tx_start']),
                                                    'tx_end': float(fields['tx_end']) if fields['tx_end'] else timepoints[-1]})
@@ -172,7 +172,7 @@ class PhylogicOutput(object):
         with open(cluster_ccf_file, 'r') as clust_file:
             header = clust_file.readline().strip('\n\r').split('\t')
             for line in clust_file:
-                fields = dict(zip(header, line.strip('\n\r').split('\t')))
+                fields = dict(list(zip(header, line.strip('\n\r').split('\t'))))
                 if not patient:
                     patient = fields['Patient_ID']
                 c = int(fields['Cluster_ID'])
@@ -197,7 +197,7 @@ class PhylogicOutput(object):
         with open(mutation_ccf_file, 'r') as mut_file:
             header = mut_file.readline().strip('\n\r').split('\t')
             for line in mut_file:
-                fields = dict(zip(header, line.strip('\n\r').split('\t')))
+                fields = dict(list(zip(header, line.strip('\n\r').split('\t'))))
                 sample = fields['Sample_ID']
                 hugo = fields['Hugo_Symbol']
                 prot_change = fields['Protein_change']
@@ -234,7 +234,7 @@ class PhylogicOutput(object):
             with open(cnv_file, 'r') as cnvs:
                 header = cnvs.readline().strip('\n\r').split('\t')
                 for line in cnvs:
-                    fields = dict(zip(header, line.strip('\n\r').split('\t')))
+                    fields = dict(list(zip(header, line.strip('\n\r').split('\t'))))
                     sample = fields['Sample_ID']
                     mut_name = fields['Event_Name']
                     if mut_name in unique_cnvs[sample]:
@@ -273,12 +273,12 @@ class PhylogicOutput(object):
                 tree.add_node(identifier)
         tree.add_edges(edges)
         tree.set_root(tree.get_node_by_id(1))
-        constrained_ccfs = {c: {} for c in tree.nodes.keys() if c}
+        constrained_ccfs = {c: {} for c in list(tree.nodes.keys()) if c}
         cell_abundances = {s: {} for s in sample_names}
         with open(abundances, 'r') as abun_fh:
             header = abun_fh.readline().strip('\n\r').split('\t')
             for line in abun_fh:
-                fields = dict(zip(header, line.strip('\n\r').split('\t')))
+                fields = dict(list(zip(header, line.strip('\n\r').split('\t'))))
                 c = int(re.search(r'(\d{1,2})$', fields['Cell_population']).group(1))
                 cell_abundance = float(fields['Constrained_CCF'])
                 sample_name = fields['Sample_ID']
@@ -416,7 +416,7 @@ class PhylogicOutput(object):
                     break
                 n_trees += 1
                 n_muts = dict.fromkeys(child_dict, 0)
-                dist_from_parent = dict.fromkeys(itertools.chain(*child_dict.values()))
+                dist_from_parent = dict.fromkeys(itertools.chain(*list(child_dict.values())))
                 for parent in child_dict:
                     if parent is not None:
                         n_muts[parent] += len(cluster_dict[parent]['muts'])
@@ -537,7 +537,7 @@ class PhylogicOutput(object):
                 if cost > curr_min:
                     return curr_min + 1
             # Cost for crossing edges and angles < 30 degrees
-            parent_child_tuples = list(map(lambda k: itertools.product([k[0]], k[1]), child_dict.items()))
+            parent_child_tuples = list([itertools.product([k[0]], k[1]) for k in list(child_dict.items())])
             for e1, e2 in itertools.combinations(itertools.chain(*parent_child_tuples), 2):
                 if len(set(e1)) != 2 or len(set(e2)) != 2:
                     # Strange Tree
@@ -603,7 +603,7 @@ class PhylogicOutput(object):
         with open(cluster_ccf_file, 'r') as clust_file:
             header = clust_file.readline().strip('\n\r').split('\t')
             for line in clust_file:
-                fields = dict(zip(header, line.strip('\n\r').split('\t')))
+                fields = dict(list(zip(header, line.strip('\n\r').split('\t'))))
                 if not patient:
                     patient = fields['Patient_ID']
                 c = int(fields['Cluster_ID'])
@@ -617,7 +617,7 @@ class PhylogicOutput(object):
                                     np.arange(1., -0.01, -0.01), '')
         for sample in ccf_dict:
             document = dom.Document()
-            max_bin = max(itertools.chain(*ccf_dict[sample].values()))
+            max_bin = max(itertools.chain(*list(ccf_dict[sample].values())))
             y_max = math.ceil(max_bin * 20) / 20.
             if y_max - max_bin < 0.01 and y_max < 1.:
                 y_max += 0.05
@@ -723,7 +723,7 @@ class PhylogicOutput(object):
         with open(mutation_ccf_file, 'r') as clust_file:
             header = clust_file.readline().strip('\n\r').split('\t')
             for line in clust_file:
-                fields = dict(zip(header, line.strip('\n\r').split('\t')))
+                fields = dict(list(zip(header, line.strip('\n\r').split('\t'))))
                 if not patient:
                     patient = fields['Patient_ID']
                 c = int(fields['Cluster_Assignment'])
@@ -738,7 +738,7 @@ class PhylogicOutput(object):
                                     np.arange(1., -0.01, -0.01), '')
         for sample in ccf_dict:
             document = dom.Document()
-            max_bin = max(itertools.chain(*[itertools.chain(*d) for d in ccf_dict[sample].values()]))
+            max_bin = max(itertools.chain(*[itertools.chain(*d) for d in list(ccf_dict[sample].values())]))
             y_max = math.ceil(max_bin * 20) / 20.
             if y_max - max_bin < 0.01 and y_max < 1.:
                 y_max += 0.05
@@ -863,7 +863,7 @@ class PhylogicOutput(object):
                 for i, sample in enumerate(patient.sample_list):
                     mean, high, low = self._get_mean_high_low(np.array(cluster_ccfs[cluster][i]))
                     line = [patient.indiv_name, sample.sample_name, aliases[i], str(cluster), str(mean), str(low), str(high)]
-                    line.extend(map(str, cluster_ccfs[cluster][i]))
+                    line.extend(list(map(str, cluster_ccfs[cluster][i])))
                     f.write('\n' + '\t'.join(map(str, line)))
 
     def write_patient_mut_ccfs(self, patient, cluster_ccfs, aliases=None):
@@ -885,7 +885,7 @@ class PhylogicOutput(object):
         with open('{}.mut_ccfs.txt'.format(patient.indiv_name), 'w') as f:
             f.write('\t'.join(header))
             for i, sample in enumerate(patient.sample_list):
-                for mut in itertools.chain(sample.mutations, sample.low_coverage_mutations.values()):
+                for mut in itertools.chain(sample.mutations, list(sample.low_coverage_mutations.values())):
                     if mut.type != 'CNV' and hasattr(mut, 'cluster_assignment') and mut.cluster_assignment is not None:
                         mut_mean, mut_high, mut_low = self._get_mean_high_low(np.array(mut.ccf_1d).astype(float))
                         c = mut.cluster_assignment
@@ -896,7 +896,7 @@ class PhylogicOutput(object):
                                 str(mut.cluster_assignment), str(mut.local_cn_a1), str(mut.local_cn_a2),
                                 str(mut_mean), str(mut_low), str(mut_high), str(clust_mean), str(clust_low),
                                 str(clust_high)]
-                        line.extend(map(str, mut.ccf_1d))
+                        line.extend(list(map(str, mut.ccf_1d)))
                         f.write('\n' + '\t'.join(map(str, line)))
 
     def write_patient_cnvs(self, patient, cluster_ccfs):
@@ -907,7 +907,7 @@ class PhylogicOutput(object):
         with open('{}.cnvs.txt'.format(patient.indiv_name), 'w') as f:
             f.write('\t'.join(header))
             for i, sample in enumerate(patient.sample_list):
-                for mut in sample.low_coverage_mutations.values():
+                for mut in list(sample.low_coverage_mutations.values()):
                     if mut.type == 'CNV' and hasattr(mut, 'cluster_assignment') and mut.cluster_assignment is not None:
                         mut_mean, mut_high, mut_low = self._get_mean_high_low(np.array(mut.ccf_1d))
                         c = mut.cluster_assignment
@@ -1052,9 +1052,9 @@ class PhylogicOutput(object):
         header = ['Patient_ID', 'Sample_ID', 'Iteration', 'Cluster_ID', 'Abundance']
         with open(indiv_id + '_cell_population_mcmc_trace.tsv', 'w') as writer:
             writer.write('\t'.join(header) + '\n')
-            for sample_id, sample_mcmc_trace in all_cell_abundances.items():
+            for sample_id, sample_mcmc_trace in list(all_cell_abundances.items()):
                 for iteration, abundances in enumerate(sample_mcmc_trace):
-                    for cluster, amount in abundances.items():
+                    for cluster, amount in list(abundances.items()):
                         writer.write('\t'.join([indiv_id, sample_id, str(iteration), str(cluster), str(amount)]) + '\n')
 
     @staticmethod
@@ -1063,8 +1063,8 @@ class PhylogicOutput(object):
         header = ['Patient_ID', 'Sample_ID', 'Iteration', 'Cluster_ID'] + ccf
         with open(indiv_id + '_mcmc_trace_constrained_densities.tsv', 'w') as writer:
             writer.write('\t'.join(header) + '\n')
-            for sample_id, cluster_densitites in mcmc_trace_constrained_densitites.items():
-                for cluster_id, densities in cluster_densitites.items():
+            for sample_id, cluster_densitites in list(mcmc_trace_constrained_densitites.items()):
+                for cluster_id, densities in list(cluster_densitites.items()):
                     for iteration, constrained_density in enumerate(densities):                        
                         line = [indiv_id, str(sample_id), str(iteration), str(cluster_id)] + [str(x) for x in constrained_density]
                         writer.write('\t'.join(line) + '\n')
@@ -1078,8 +1078,8 @@ class PhylogicOutput(object):
         header = ['Patient_ID', 'Sample_ID', 'Cell_population', 'Cell_abundance']
         with open(indiv_id + '_cell_population_abundances.tsv', 'w') as writer:
             writer.write('\t'.join(header) + '\n')
-            for (sample_id, abundances) in cell_abundances.items():
-                for (cluster_id, abundance) in abundances.items():
+            for (sample_id, abundances) in list(cell_abundances.items()):
+                for (cluster_id, abundance) in list(abundances.items()):
                     population = '_'.join(['CL{}'.format(cl) for cl in cells_ancestry[cluster_id]])
                     line = [indiv_id, sample_id, population, str(abundance)]
                     writer.write('\t'.join(line) + '\n')
@@ -1095,7 +1095,7 @@ class PhylogicOutput(object):
         header = ['Patient_ID', 'Sample_ID', 'Cell_population', 'Constrained_CCF']
         with open(indiv_id + '_constrained_ccf.tsv', 'w') as writer:
             writer.write('\t'.join(header) + '\n')
-            for (sample_id, sample_config) in constrained_ccf_configuration.items():
+            for (sample_id, sample_config) in list(constrained_ccf_configuration.items()):
                 for (cluster_id, abundance) in sample_config:
                     population = '_'.join(['CL{}'.format(cl) for cl in cells_ancestry[cluster_id]])
                     line = [indiv_id, sample_id, population, str(abundance)]
@@ -1106,7 +1106,7 @@ class PhylogicOutput(object):
         header = ['Patient_ID', 'Cluster_ID', 'Iteration', 'Growth_Rate']
         with open(indiv_id + '_growth_rate.tsv', 'w') as writer:
             writer.write('\t'.join(header) + '\n')
-            for cluster_id, cluster_growth_rates in growth_rates.items():
+            for cluster_id, cluster_growth_rates in list(growth_rates.items()):
                 for iteration, rate in enumerate(cluster_growth_rates):                    
                     line = [indiv_id, str(cluster_id), str(iteration), str(rate)]
                     writer.write('\t'.join(line) + '\n')
@@ -1114,7 +1114,7 @@ class PhylogicOutput(object):
     
     def plot_growth_rates(self, growth_rates, indiv):    
         import seaborn as sns
-        for clust, rate in growth_rates.items():
+        for clust, rate in list(growth_rates.items()):
             if sum(rate) == 0: 
                 continue
             sns.distplot(np.array(rate), bins=35,
@@ -1145,7 +1145,7 @@ class PhylogicOutput(object):
                 line = [patient_name, 'WGD', '', '', '', '', '', '', '', '', '', '', pi_mean, pi_low, pi_high]
                 line.extend(timing_engine.WGD.pi_dist)
                 f.write('\n' + '\t'.join(map(str, line)))
-            for cn_event_list in timing_engine.all_cn_events.values():
+            for cn_event_list in list(timing_engine.all_cn_events.values()):
                 for cn_event in cn_event_list:
                     if cn_event.pi_dist is not None and not any(np.isnan(cn_event.pi_dist)):
                         pi_mean, pi_high, pi_low = self._get_mean_high_low(cn_event.pi_dist)
@@ -1157,7 +1157,7 @@ class PhylogicOutput(object):
                             cn_event.cn_a1, cn_event.cn_a2, cn_event.allelic_cn, pi_mean, pi_low, pi_high]
                     line.extend(pi_dist)
                     f.write('\n' + '\t'.join(map(str, line)))
-            for mut in timing_engine.mutations.values():
+            for mut in list(timing_engine.mutations.values()):
                 if mut.pi_dist is not None and not any(np.isnan(mut.pi_dist)):
                     pi_mean, pi_high, pi_low = self._get_mean_high_low(mut.pi_dist)
                     pi_dist = mut.pi_dist
@@ -1245,7 +1245,7 @@ class PhylogicOutput(object):
         """
         all_events = set(itertools.chain(*comps))
         neighbors = {eve: set() for eve in all_events}
-        for (eve1, eve2), (p1_2, p2_1, p_unknown) in comps.items():
+        for (eve1, eve2), (p1_2, p2_1, p_unknown) in list(comps.items()):
             if p_unknown > coincidence_thresh:
                 neighbors[eve1].add(eve2)
                 neighbors[eve2].add(eve1)
@@ -1274,7 +1274,7 @@ class PhylogicOutput(object):
                     label += ', ' + eve
             labels.append(label)
             DG.add_node(label)
-        for i1, i2 in itertools.combinations(range(len(nodes)), 2):
+        for i1, i2 in itertools.combinations(list(range(len(nodes))), 2):
             label1 = labels[i1]
             eve1 = next(iter(nodes[i1]))
             label2 = labels[i2]
@@ -1329,7 +1329,7 @@ class PhylogicOutput(object):
             return order
 
         while nodes_to_order:
-            node_idx = max(range(len(nodes_to_order)), key=lambda idx: order_nodes(nodes_to_order[idx]))
+            node_idx = max(list(range(len(nodes_to_order))), key=lambda idx: order_nodes(nodes_to_order[idx]))
             ordered_nodes.append(nodes_to_order.pop(node_idx))
 
         node_layers = dict.fromkeys(nodes, 0)
@@ -1364,13 +1364,13 @@ class PhylogicOutput(object):
             pi_score = '{} ({}-{})'.format(pi_mean, pi_low, pi_high)
             eve_list.append({'Event name': 'WGD', 'Chromosome': '', 'Position': '', 'Pi score': pi_score})
             cnv_pi_dists['WGD'] = list(timing_engine.WGD.pi_dist)
-        for eve in itertools.chain(*timing_engine.all_cn_events.values()):
+        for eve in itertools.chain(*list(timing_engine.all_cn_events.values())):
             pi_mean, pi_high, pi_low = self._get_mean_high_low(eve.pi_dist)
             pi_score = '{} ({}-{})'.format(pi_mean, pi_low, pi_high)
             eve_list.append({'Event name': eve.event_name, 'Chromosome': eve.chrN, 'Position': '',
                              'Pi score': pi_score})
             cnv_pi_dists[eve.event_name] = list(eve.pi_dist)
-        for mut in timing_engine.mutations.values():
+        for mut in list(timing_engine.mutations.values()):
             pi_mean, pi_high, pi_low = self._get_mean_high_low(mut.pi_dist)
             pi_score = '{} ({}-{})'.format(pi_mean, pi_low, pi_high)
             eve_list.append({'Event name': mut.event_name, 'Chromosome': mut.chrN, 'Position': mut.pos,
