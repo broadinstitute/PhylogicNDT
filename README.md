@@ -1,4 +1,7 @@
 # PhylogicNDT
+
+#This is Python2 version branch, please use "python3" branch for Python3 update
+
 ## Installation 
 First:  Clone this repository
 
