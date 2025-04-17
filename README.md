@@ -2,7 +2,7 @@
 ## Installation 
 First:  Clone this repository
 
-    git clone https://github.com/leshlab/PhylogicNDT3.git
+    git git clone --branch python3 --single-branch  https://github.com/broadinstitute/PhylogicNDT.git
     cd PhylogicNDT
 
 Then either :
